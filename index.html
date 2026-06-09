@@ -83,7 +83,7 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, onValue, remove, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // Firebase 설정
+    // Firebase 원본 설정 연동 완료
     const firebaseConfig = {
         apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
         authDomain: "suhang-86f3f.firebaseapp.com",
@@ -99,8 +99,8 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // OpenAI API KEY
-    const OPENAI_API_KEY = "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";
+    // 보내주신 Google Apps Script 프록시 주소 완벽 바인딩 완료
+    const PROXY_URL = "https://script.google.com/a/macros/daehyun.hs.kr/s/AKfycbzKOYzjUlEOhmrbjReUgbOGJXw-hW3ubtYPbfRPrGj0Njfm6ZEBf52QwTBzTuqe6meAEw/exec";
 
     const authSection = document.getElementById('authSection');
     const mainSection = document.getElementById('mainSection');
@@ -144,7 +144,7 @@
         }
     });
 
-    /* [OpenAI API 연동 - 대화 및 음성 생성] */
+    /* [구글 앱스 스크립트 기반 AI 연동 - Chat 및 TTS] */
     document.getElementById('askBtn').addEventListener('click', async () => {
         const question = document.getElementById('questionInput').value;
         const persona = document.getElementById('personaSelect').value;
@@ -154,83 +154,60 @@
         status.textContent = "역사의 인물이 답하고 있습니다...";
         
         try {
-            // GPT 호출
-            const chatRes = await fetch("https://api.openai.com/v1/chat/completions", {
+            // 1. 구글 우회 서버를 통해 GPT 질문 전송
+            const chatRes = await fetch(PROXY_URL, {
                 method: 'POST',
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${OPENAI_API_KEY}`
-                },
-                body: JSON.stringify({
-                    model: "gpt-4o-mini",
-                    messages: [
-                        { role: "system", content: `너는 ${persona}` },
-                        { role: "user", content: question }
-                    ]
-                })
+                body: JSON.stringify({ type: 'chat', persona: persona, question: question })
             });
-            
-            if (!chatRes.ok) {
-                const errorData = await chatRes.json();
-                throw new Error(errorData.error?.message || "API 호출 실패");
-            }
-
             const chatData = await chatRes.json();
-            const answer = chatData.choices[0].message.content;
+            if(chatData.error) throw new Error(chatData.error);
+            
+            const answer = chatData.answer;
             document.getElementById('answerBox').textContent = answer;
 
-            // TTS 호출
+            // 2. 구글 우회 서버를 통해 TTS 음성 바이너리 획득
             status.textContent = "목소리를 불러오는 중입니다...";
-            const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
+            const ttsRes = await fetch(PROXY_URL, {
                 method: 'POST',
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${OPENAI_API_KEY}`
-                },
-                body: JSON.stringify({
-                    model: "tts-1",
-                    input: answer,
-                    voice: "onyx"
-                })
+                body: JSON.stringify({ type: 'tts', text: answer })
             });
+            const ttsData = await ttsRes.json();
+            if(ttsData.error) throw new Error(ttsData.error);
             
-            if (!ttsRes.ok) throw new Error("TTS 호출에 실패했습니다.");
-            
-            const audioBlob = await ttsRes.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const player = document.getElementById('audioPlayer');
-            player.src = audioUrl;
-            player.classList.remove('hidden');
-            player.play();
+            if(ttsData.audioBase64) {
+                const player = document.getElementById('audioPlayer');
+                player.src = `data:audio/mpeg;base64,${ttsData.audioBase64}`;
+                player.classList.remove('hidden');
+                player.play();
+            }
 
             status.textContent = "인터뷰 완료.";
         } catch(e) {
             status.textContent = "오류 발생.";
-            alert("연동 실패: " + e.message);
+            alert("연동 실패: " + e.message + "\n(구글 앱스 스크립트 배포 시 '액세스 권한: 모든 사용자(Anyone)'로 되어 있는지 확인해 주세요.)");
             console.error(e);
         }
     });
 
-    /* [데이터 연동: 인물 이름과 답변 내용을 묶어서 Firebase 저장] */
+    /* [데이터 연동: 인물 정보와 답변을 정제하여 Firebase 적재] */
     document.getElementById('saveBtn').addEventListener('click', async () => {
         if(!currentUser) return alert("로그인이 필요합니다.");
         const answer = document.getElementById('answerBox').textContent;
         
-        // 중요: 선택된 인물의 이름(텍스트)을 정확하게 가져옵니다.
+        // 인물 옵션 박스의 이름 정확히 추출
         const personaSelect = document.getElementById('personaSelect');
         const personaName = personaSelect.options[personaSelect.selectedIndex].text;
         
         if(answer.includes("아직 기록된 대화가 없습니다")) return alert("기록할 내용이 없습니다.");
 
         try {
-            // Firebase Realtime Database 저장 처리
             const historyRef = ref(database, `users/${currentUser.uid}/items`);
             const newItemRef = push(historyRef);
             
-            // 객체 형태로 인물명(name)과 답변 내용(text)을 매핑하여 저장
+            // 인물명(name)과 답변내용(text)을 깔끔하게 나누어 매핑 저장
             await set(newItemRef, {
-                name: personaName,      // 예: "고구려 - 광개토대왕"
-                text: answer,           // AI가 출력한 답변 내용
+                name: personaName,
+                text: answer,
                 date: new Date().toLocaleString()
             });
             alert("사초에 성공적으로 기록되었습니다.");
@@ -239,7 +216,7 @@
         }
     });
 
-    /* [데이터 불러오기] */
+    /* [기록 데이터 실시간 로드] */
     function loadHistory(uid) {
         const historyRef = ref(database, `users/${uid}/items`);
         onValue(historyRef, (snapshot) => {
@@ -266,7 +243,7 @@
         });
     }
 
-    /* [데이터 삭제] */
+    /* [기록 데이터 삭제] */
     window.deleteRecord = (id) => {
         if(!currentUser) return;
         if(confirm("기록을 사초에서 삭제하시겠습니까?")) {
