@@ -83,7 +83,7 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, onValue, remove, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // 본인 Firebase 설정 적용 완료
+    // Firebase 설정
     const firebaseConfig = {
         apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
         authDomain: "suhang-86f3f.firebaseapp.com",
@@ -99,14 +99,14 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 사용자 OpenAI API KEY 연동
+    // OpenAI API KEY
     const OPENAI_API_KEY = "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";
 
     const authSection = document.getElementById('authSection');
     const mainSection = document.getElementById('mainSection');
     let currentUser = null;
 
-    /* [인증 기능: 로그인/회원가입] */
+    /* [인증 기능] */
     document.getElementById('signupBtn').addEventListener('click', async () => {
         const email = document.getElementById('emailInput').value;
         const pw = document.getElementById('passwordInput').value;
@@ -144,7 +144,7 @@
         }
     });
 
-    /* [OpenAI API 연동 - Chat 및 TTS] */
+    /* [OpenAI API 연동 - 대화 및 음성 생성] */
     document.getElementById('askBtn').addEventListener('click', async () => {
         const question = document.getElementById('questionInput').value;
         const persona = document.getElementById('personaSelect').value;
@@ -154,7 +154,7 @@
         status.textContent = "역사의 인물이 답하고 있습니다...";
         
         try {
-            // 1. OpenAI Chat Completion 호출 (GPT-4o-mini 모델 활용)
+            // GPT 호출
             const chatRes = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: 'POST',
                 headers: {
@@ -169,13 +169,17 @@
                     ]
                 })
             });
-            const chatData = await chatRes.json();
-            if (chatData.error) throw new Error(chatData.error.message);
             
+            if (!chatRes.ok) {
+                const errorData = await chatRes.json();
+                throw new Error(errorData.error?.message || "API 호출 실패");
+            }
+
+            const chatData = await chatRes.json();
             const answer = chatData.choices[0].message.content;
             document.getElementById('answerBox').textContent = answer;
 
-            // 2. OpenAI Audio Speech 호출 (TTS 기능)
+            // TTS 호출
             status.textContent = "목소리를 불러오는 중입니다...";
             const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
                 method: 'POST',
@@ -186,13 +190,12 @@
                 body: JSON.stringify({
                     model: "tts-1",
                     input: answer,
-                    voice: "onyx" // 위엄 있는 남성 목소리
+                    voice: "onyx"
                 })
             });
             
             if (!ttsRes.ok) throw new Error("TTS 호출에 실패했습니다.");
             
-            // 바이너리 오디오 데이터를 Blob 객체로 변환하여 재생
             const audioBlob = await ttsRes.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
             const player = document.getElementById('audioPlayer');
@@ -208,24 +211,26 @@
         }
     });
 
-    /* [데이터 연동: Firebase Realtime Database 저장 및 읽기] */
+    /* [데이터 연동: 인물 이름과 답변 내용을 묶어서 Firebase 저장] */
     document.getElementById('saveBtn').addEventListener('click', async () => {
         if(!currentUser) return alert("로그인이 필요합니다.");
         const answer = document.getElementById('answerBox').textContent;
         
-        // 인물 이름 안전하게 추출하도록 수정 완료
+        // 중요: 선택된 인물의 이름(텍스트)을 정확하게 가져옵니다.
         const personaSelect = document.getElementById('personaSelect');
         const personaName = personaSelect.options[personaSelect.selectedIndex].text;
         
         if(answer.includes("아직 기록된 대화가 없습니다")) return alert("기록할 내용이 없습니다.");
 
         try {
-            // Realtime Database에 저장 경로 지정
+            // Firebase Realtime Database 저장 처리
             const historyRef = ref(database, `users/${currentUser.uid}/items`);
             const newItemRef = push(historyRef);
+            
+            // 객체 형태로 인물명(name)과 답변 내용(text)을 매핑하여 저장
             await set(newItemRef, {
-                name: personaName,
-                text: answer,
+                name: personaName,      // 예: "고구려 - 광개토대왕"
+                text: answer,           // AI가 출력한 답변 내용
                 date: new Date().toLocaleString()
             });
             alert("사초에 성공적으로 기록되었습니다.");
@@ -234,6 +239,7 @@
         }
     });
 
+    /* [데이터 불러오기] */
     function loadHistory(uid) {
         const historyRef = ref(database, `users/${uid}/items`);
         onValue(historyRef, (snapshot) => {
@@ -260,7 +266,7 @@
         });
     }
 
-    // 전역 삭제 함수 정의
+    /* [데이터 삭제] */
     window.deleteRecord = (id) => {
         if(!currentUser) return;
         if(confirm("기록을 사초에서 삭제하시겠습니까?")) {
