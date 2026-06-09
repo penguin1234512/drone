@@ -242,9 +242,6 @@
       button, .download-link { width: 100%; }
     }
   </style>
-
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 </head>
 <body>
 
@@ -315,13 +312,32 @@
 
     <div>
       <h3 style="color:#1a237e; margin-bottom:10px;">나의 사초 (역사 기록 보관소)</h3>
-      <button class="refresh-btn" onclick="loadData()">사초 새로고침</button>
+      <button class="refresh-btn" id="refreshBtn">사초 새로고침</button>
       <div id="dataList" class="list"></div>
     </div>
   </div>
 
-  <script>
-    // 💡 전달해주신 본인의 Firebase Web 앱 실제 키값이 완벽 주입되었습니다!
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      signOut,
+      onAuthStateChanged
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import {
+      getDatabase,
+      ref,
+      push,
+      set,
+      update,
+      remove,
+      onValue,
+      off
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+    // 귀하의 Firebase Config 환경 설정
     const firebaseConfig = {
       apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
       authDomain: "suhang-86f3f.firebaseapp.com",
@@ -333,16 +349,14 @@
       measurementId: "G-YDVD63CF7H"
     };
     
-    // Firebase 초기화 진행
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
+    // 뼈대 초기화
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const database = getDatabase(app);
 
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoM0bZsWJ4lES4EXSx09myjz08T2akHlYavU3ZqBWmLZEZrTUIgpt3TPlW67UYC2EPrg/exec';
-    const DATABASE_URL = firebaseConfig.databaseURL;
-    const DATA_PATH = 'items';
-    const USER_PATH = 'users';
 
-    // UI 엘리먼트 수집
+    // HTML DOM 인터페이스 연동
     const authContainer = document.getElementById('authContainer');
     const mainContainer = document.getElementById('mainContainer');
     const authEmail = document.getElementById('authEmail');
@@ -358,6 +372,7 @@
     const makeBtn = document.getElementById('makeBtn');
     const clearBtn = document.getElementById('clearBtn');
     const saveBtn = document.getElementById('saveBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
     const statusBox = document.getElementById('status');
     const resultBox = document.getElementById('resultBox');
     const answerBox = document.getElementById('answerBox');
@@ -367,152 +382,145 @@
     const dataList = document.getElementById('dataList');
 
     let currentAnswerText = ""; 
-    let loggedInUser = null; 
+    let currentUser = null;
+    let currentItemsRef = null;
 
-    // 인증 핸들러 등록
-    signUpBtn.addEventListener('click', handleSignUp);
-    logInBtn.addEventListener('click', handleLogIn);
-    logOutBtn.addEventListener('click', handleLogOut);
+    function getAuthInputs() {
+      const email = authEmail.value.trim();
+      const password = authPassword.value.trim();
+      if (!email || !password) {
+        alert('이메일과 비밀번호를 모두 입력해주세요.');
+        return null;
+      }
+      if (password.length < 6) {
+        alert('비밀번호는 6자리 이상이어야 안전합니다.');
+        return null;
+      }
+      return { email, password };
+    }
 
-    // 인터뷰 코어 기능 핸들러 등록
+    /* 🔐 [Auth] 회원가입 */
+    signUpBtn.addEventListener('click', async () => {
+      const credentials = getAuthInputs();
+      if (!credentials) return;
+      try {
+        await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
+        alert('사관 명부에 등록(회원가입)되었습니다!');
+      } catch (error) {
+        alert(getKoreanErrorMessage(error.code));
+      }
+    });
+
+    /* 🔐 [Auth] 로그인 */
+    logInBtn.addEventListener('click', async () => {
+      const credentials = getAuthInputs();
+      if (!credentials) return;
+      try {
+        await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
+      } catch (error) {
+        alert(getKoreanErrorMessage(error.code));
+      }
+    });
+
+    /* 🔐 [Auth] 로그아웃 */
+    logOutBtn.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+        clearPage();
+      } catch (error) {
+        alert('로그아웃 도중 오류가 발생했습니다.');
+      }
+    });
+
+    /* 🔐 실시간 유저 인증 모니터 관측기 */
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        currentUserEmail.textContent = user.email;
+        authContainer.classList.add('hidden');
+        mainContainer.classList.remove('hidden');
+        authEmail.value = '';
+        authPassword.value = '';
+        
+        // 해당 유저 전용 Realtime DB 리스너 가동
+        startRealtimeDataListener(user.uid);
+      } else {
+        currentUser = null;
+        authContainer.classList.remove('hidden');
+        mainContainer.classList.add('hidden');
+        currentUserEmail.textContent = '-';
+        dataList.innerHTML = '';
+        stopRealtimeDataListener();
+      }
+    });
+
+    /* 📜 DB 실시간 연동 리스너 규칙 */
+    function startRealtimeDataListener(uid) {
+      stopRealtimeDataListener();
+      statusBox.textContent = '사초(DB) 기록을 동기화하는 중...';
+
+      // 유저 고유 공간 하위에 아이템 정렬 경로 지정
+      currentItemsRef = ref(database, `users/${uid}/items`);
+
+      onValue(currentItemsRef, (snapshot) => {
+        const data = snapshot.val();
+        renderData(data);
+        statusBox.textContent = '실시간 동기화 완료.';
+      }, (error) => {
+        console.error(error);
+        statusBox.textContent = '사초 데이터를 가져오지 못했습니다. 보안 규칙을 점검하십시오.';
+      });
+    }
+
+    function stopRealtimeDataListener() {
+      if (currentItemsRef) {
+        off(currentItemsRef);
+        currentItemsRef = null;
+      }
+    }
+
+    // 메인 비즈니스 로직 이벤트 바인딩
     makeBtn.addEventListener('click', startInterview);
     clearBtn.addEventListener('click', clearPage);
     saveBtn.addEventListener('click', addFirebaseData);
-
-    questionInput.addEventListener('keydown', function(event) {
-      if (event.key === 'Enter' && event.ctrlKey) {
-        startInterview();
-      }
+    refreshBtn.addEventListener('click', () => {
+      if (currentUser) startRealtimeDataListener(currentUser.uid);
     });
 
-    function getEndpoint(path = '') {
-      const cleanPath = path ? `/${path}` : '';
-      return `${DATABASE_URL}/${DATA_PATH}${cleanPath}.json`;
-    }
-
-    function getUserEndpoint(uid = '') {
-      const cleanPath = uid ? `/${uid}` : '';
-      return `${DATABASE_URL}/${USER_PATH}${cleanPath}.json`;
-    }
-
-    /* 🔐 회원가입 */
-    async function handleSignUp() {
-      const email = authEmail.value.trim();
-      const password = authPassword.value.trim();
-
-      if(!email || !password) { alert('이메일과 비밀번호를 모두 입력하세요.'); return; }
-      
-      try {
-        await auth.createUserWithEmailAndPassword(email, password);
-        alert('사관 임명이 완료되었습니다! 자동으로 로그인 처리됩니다.');
-      } catch (error) {
-        console.error(error);
-        alert('회원가입 오류: ' + error.message);
-      }
-    }
-
-    /* 🔐 로그인 */
-    async function handleLogIn() {
-      const email = authEmail.value.trim();
-      const password = authPassword.value.trim();
-
-      if(!email || !password) { alert('이메일과 비밀번호를 모두 입력하세요.'); return; }
-
-      try {
-        await auth.signInWithEmailAndPassword(email, password);
-        alert('청사에 정상적으로 입정하셨습니다.');
-      } catch (error) {
-        console.error(error);
-        alert('로그인 오류: ' + error.message);
-      }
-    }
-
-    /* 🔐 로그아웃 */
-    async function handleLogOut() {
-      try {
-        await auth.signOut();
-        alert('안전하게 퇴정 처리되었습니다.');
-        clearPage();
-      } catch (error) {
-        alert('로그아웃 수행 오류');
-      }
-    }
-
-    /* 🔐 인증 상태 모니터링 체계 (onAuthStateChanged) */
-    auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        loggedInUser = user;
-        currentUserEmail.textContent = user.email;
-        
-        authContainer.classList.add('hidden');
-        mainContainer.classList.remove('hidden');
-        
-        authEmail.value = "";
-        authPassword.value = "";
-
-        // 💡 로그인 성공하는 즉시 Realtime Database의 'users' 노드 하위에 유저 데이터 기록
-        try {
-          const syncData = {
-            uid: user.uid,
-            email: user.email,
-            lastLogin: new Date().toLocaleString('ko-KR')
-          };
-          await fetch(getUserEndpoint(user.uid), {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(syncData)
-          });
-        } catch(e) { console.error("Realtime DB 유저 갱신 실패", e); }
-
-        loadData();
-      } else {
-        loggedInUser = null;
-        authContainer.classList.remove('hidden');
-        mainContainer.classList.add('hidden');
-        dataList.innerHTML = '';
-      }
-    });
-
-    /* 📜 기능 로직: 역사 인물 인터뷰 진행 */
+    /* 📜 코어 기능: 인물 인터뷰 시스템 호출 */
     async function startInterview() {
-      if (!loggedInUser) { alert('세션이 유효하지 않습니다. 다시 로그인하세요.'); return; }
+      if (!currentUser) { alert('로그인이 만료되었습니다.'); return; }
       
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       const speed = Number(speedInput.value || 1.0);
 
-      if (!question) { alert('인물에게 던질 질문을 채워주세요.'); return; }
+      if (!question) { alert('질문 내용을 빈칸 없이 적어주세요.'); return; }
 
       audioPlayer.removeAttribute('src');
       audioPlayer.classList.add('hidden');
       downloadLink.classList.add('hidden');
 
-      // 💡 [선제 조치] 에러 유무 상관없이 질문 내용을 사초에 먼저 실시간 적재 (인증 유저 정보 포함)
+      // 1단계: 선제 조건 없는 질문 사항 데이터 임시 백업 보존
       try {
         setLoading(true);
         resultBox.classList.add('hidden');
-        statusBox.textContent = '사초에 질문 기록을 적는 중...';
+        statusBox.textContent = '사초에 질문 서두를 작성 중...';
         
-        const backupItem = {
+        const itemsRef = ref(database, `users/${currentUser.uid}/items`);
+        const newItemRef = push(itemsRef);
+        await set(newItemRef, {
           title: `${selectedName}에 대한 질문`,
-          content: `[질문 내용]: ${question}\n(※ AI 답변 수신 전 대기 중 혹은 에러)`,
-          author: loggedInUser.email,
-          authorUid: loggedInUser.uid,
-          createdAt: new Date().toLocaleString('ko-KR')
-        };
-        
-        await fetch(getEndpoint(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(backupItem)
+          content: `[질문 본문]: ${question}\n(※ AI 답변 대기 중 또는 예기치 못한 에러 상태)`,
+          createdAt: new Date().toLocaleString('ko-KR'),
+          updatedAt: ''
         });
-        await loadData();
-      } catch (fbError) { console.error("임시 백업 적재 실패", fbError); }
+      } catch (fbError) { console.error("임시 백업 실패", fbError); }
 
-      // OpenAI 챗봇 연동 및 텍스트 송수신
+      // 2단계: OpenAI 챗봇 교신
       try {
-        statusBox.textContent = `${selectedName} 장군에게 전령을 보냈습니다. 답변을 기다리는 중...`;
+        statusBox.textContent = `${selectedName} 장군에게 밀서를 발송했습니다...`;
 
         const chatResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -522,14 +530,14 @@
 
         const chatData = await chatResponse.json();
         if (chatData.error) throw new Error(chatData.error);
-        if (!chatData.answer) throw new Error('답변 데이터 유실');
+        if (!chatData.answer) throw new Error('데이터 응답 실패');
 
         currentAnswerText = chatData.answer;
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        // TTS 음성 변환 엔진 호출
-        statusBox.textContent = '목소리를 조율하여 불러오는 중입니다...';
+        // 3단계: TTS 음성 복원 변환 호출
+        statusBox.textContent = '인물의 음성을 복원하는 중입니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -550,12 +558,12 @@
         }
 
         resultBox.classList.remove('hidden');
-        statusBox.textContent = '인터뷰 프로토콜이 완료되었습니다.';
+        statusBox.textContent = '대화 기록이 갱신되었습니다.';
       } catch (error) {
         console.error(error);
         statusBox.textContent = '교신 실패 (오류 발생)';
-        currentAnswerText = `[시스템 안내]: OpenAI API 연동 실패.\n원인: ${error.message}\n\n질문 본문:\n${question}`;
-        answerTitle.textContent = `⚠️ 통신 차단됨 (${selectedName})`;
+        currentAnswerText = `[시스템 피드백]: OpenAI API 작동 불가.\n원인: ${error.message}\n\n질문:\n${question}`;
+        answerTitle.textContent = `⚠️ 통신 차단 (${selectedName})`;
         answerBox.textContent = currentAnswerText;
         resultBox.classList.remove('hidden');
       } finally {
@@ -563,79 +571,57 @@
       }
     }
 
-    /* 💡 최종 답변 저장 */
+    /* 📜 답변을 사초 보관소에 최종 정식 저장 */
     async function addFirebaseData() {
-      if (!loggedInUser) return;
+      if (!currentUser) return;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       if (!currentAnswerText) return;
 
-      const newItem = {
-        title: selectedName, 
-        content: currentAnswerText, 
-        author: loggedInUser.email,
-        authorUid: loggedInUser.uid,
-        createdAt: new Date().toLocaleString('ko-KR')
-      };
-
       try {
-        statusBox.textContent = '사초 기록 보관 절차 진행 중...';
-        await fetch(getEndpoint(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newItem)
+        statusBox.textContent = '사초 기록 보관소 수록 중...';
+        const itemsRef = ref(database, `users/${currentUser.uid}/items`);
+        const newItemRef = push(itemsRef);
+
+        await set(newItemRef, {
+          title: selectedName, 
+          content: currentAnswerText, 
+          createdAt: new Date().toLocaleString('ko-KR'),
+          updatedAt: ''
         });
-        alert('역사 보관소(DB)에 안전하게 기록 수록되었습니다.');
-        await loadData();
-      } catch (error) { alert('Firebase 저장 실패'); }
+        alert('역사 보관소(Realtime DB)에 안전하게 추가 기록되었습니다.');
+      } catch (error) { alert('Firebase 저장 도중 오류 발생'); }
     }
 
-    /* 💡 Realtime Database 사초 전체 로드 */
-    async function loadData() {
+    /* 📜 기록 삭제 */
+    window.deleteData = async function(id) {
+      if (!currentUser) return;
+      if (!confirm('해당 기록을 영구히 사삭(삭제)하시겠습니까?')) return;
       try {
-        const response = await fetch(getEndpoint());
-        const data = await response.json();
-        renderData(data);
-      } catch (error) {
-        dataList.innerHTML = '<div class="empty">데이터 로드에 실패했습니다.</div>';
-      }
-    }
+        await remove(ref(database, `users/${currentUser.uid}/items/${id}`));
+      } catch (error) { alert('삭제 실패'); }
+    };
 
-    /* 💡 특정 기록 폐기(삭제) */
-    async function deleteData(id) {
-      if (!confirm('해당 기록을 영구히 결단(삭제)하시겠습니까?')) return;
-      try {
-        await fetch(getEndpoint(id), { method: 'DELETE' });
-        await loadData();
-      } catch (error) { alert('삭제 처리에 실패했습니다.'); }
-    }
-
-    /* 💡 기록 정보 수정 */
-    async function updateData(id) {
+    /* 📜 기록 수정 변경 건 저장 */
+    window.updateData = async function(id) {
+      if (!currentUser) return;
       const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
       const editContent = document.getElementById(`edit-content-${id}`).value.trim();
 
-      if (!editTitle || !editContent) { alert('모든 칸을 채워넣어 주세요.'); return; }
-
-      const updatedItem = {
-        title: editTitle,
-        content: editContent,
-        updatedAt: new Date().toLocaleString('ko-KR')
-      };
+      if (!editTitle || !editContent) { alert('수정 내용을 입력해주세요.'); return; }
 
       try {
-        await fetch(getEndpoint(id), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedItem)
+        await update(ref(database, `users/${currentUser.uid}/items/${id}`), {
+          title: editTitle,
+          content: editContent,
+          updatedAt: new Date().toLocaleString('ko-KR')
         });
-        await loadData();
-      } catch (error) { alert('수정 처리에 실패했습니다.'); }
-    }
+      } catch (error) { alert('수정 변경 실패'); }
+    };
 
-    /* 💡 화면에 역사 리스트 드로잉 */
+    /* 📜 화면 렌더링 그리기 */
     function renderData(data) {
       dataList.innerHTML = '';
-      if (!data) { dataList.innerHTML = '<div class="empty">보관된 역사 기록이 존재하지 않습니다.</div>'; return; }
+      if (!data) { dataList.innerHTML = '<div class="empty">아직 보관된 기록이 없습니다.</div>'; return; }
 
       Object.entries(data).reverse().forEach(([id, item]) => {
         const div = document.createElement('div');
@@ -644,7 +630,7 @@
 
         div.innerHTML = `
           <div>
-            <p class="item-title">${escapeHTML(item.title || '')} <span style="font-size:11px; color:#7e57c2; font-weight:normal;">[사관: ${escapeHTML(item.author || '익명 사관')}]</span></p>
+            <p class="item-title">${escapeHTML(item.title || '')}</p>
             <p class="item-content">${escapeHTML(item.content || '')}</p>
             <div class="item-date">기록일: ${item.createdAt || '-'} ${item.updatedAt ? ` / 수정일: ${item.updatedAt}` : ''}</div>
           </div>
@@ -657,17 +643,17 @@
       });
     }
 
-    function showEditForm(id, title, content) {
+    window.showEditForm = function(id, title, content) {
       const itemBox = document.getElementById(`item-${id}`);
       itemBox.innerHTML = `
         <div class="edit-box">
           <input id="edit-title-${id}" type="text" value="${title}" />
           <input id="edit-content-${id}" type="text" value="${content}" />
           <button class="save-btn" onclick="updateData('${id}')">저장</button>
-          <button class="cancel-btn" onclick="loadData()">취소</button>
+          <button class="cancel-btn" onclick="document.getElementById('refreshBtn').click()">취소</button>
         </div>
       `;
-    }
+    };
 
     function base64ToAudioUrl(base64, mimeType) {
       const byteCharacters = atob(base64);
@@ -684,12 +670,11 @@
     function escapeHTML(text) {
       return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
     }
-    
     function escapeForAttribute(text) { return escapeHTML(text).replaceAll('`', '&#096;'); }
     
     function setLoading(isLoading) {
       makeBtn.disabled = isLoading;
-      makeBtn.textContent = isLoading ? '장군과 소통 중...' : '질문 전송 및 음성 듣기';
+      makeBtn.textContent = isLoading ? '전령 교신 중...' : '질문 전송 및 음성 듣기';
     }
 
     function clearPage() {
@@ -702,6 +687,28 @@
       downloadLink.classList.add('hidden');
       resultBox.classList.add('hidden');
     }
+
+    function getKoreanErrorMessage(code) {
+      switch (code) {
+        case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
+        case 'auth/invalid-email': return '이메일 형식이 올바르지 않습니다.';
+        case 'auth/weak-password': return '비밀번호가 너무 약합니다. 6자리 이상으로 입력해주세요.';
+        case 'auth/user-not-found': return '가입되지 않은 이메일입니다.';
+        case 'auth/wrong-password': return '비밀번호가 올바르지 않습니다.';
+        case 'auth/invalid-credential': return '이메일 또는 비밀번호가 올바르지 않습니다.';
+        case 'auth/network-request-failed': return '네트워크 연결 상태를 확인해주세요.';
+        default: return `인증 오류가 발생했습니다: ${code}`;
+      }
+    }
+
+    // 엔터키 숏컷 편의 기능 추가
+    document.addEventListener('keydown', function(event) {
+      if (event.key !== 'Enter') return;
+      const activeId = document.activeElement.id;
+      if (activeId === 'authEmail' || activeId === 'authPassword') {
+        logInBtn.click();
+      }
+    });
   </script>
 </body>
 </html>
