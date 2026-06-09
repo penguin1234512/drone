@@ -275,7 +275,7 @@
       <div id="answerBox" class="chat-display"></div>
       <audio id="audioPlayer" controls></audio>
       <div class="button-row">
-        <a id="downloadLink" class="download-link" href="#" download="interview.mp3">mp3 다운로드</a>
+        <a id="downloadLink" class="download-link hidden" href="#" download="interview.mp3">mp3 다운로드</a>
         <button class="save-btn" id="saveBtn">이 대화를 사초(DB)에 기록하기</button>
       </div>
     </div>
@@ -290,10 +290,7 @@
   </div>
 
   <script>
-    // 구글 앱스 스크립트 웹앱 주소
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoM0bZsWJ4lES4EXSx09myjz08T2akHlYavU3ZqBWmLZEZrTUIgpt3TPlW67UYC2EPrg/exec';
-    
-    // 💡 질문하신 본인의 Firebase Realtime Database 주소로 완벽 수정 완료!
     const DATABASE_URL = 'https://suhang-86f3f-default-rtdb.firebaseio.com';
     const DATA_PATH = 'items';
 
@@ -328,6 +325,7 @@
       return `${DATABASE_URL}/${DATA_PATH}${cleanPath}.json`;
     }
 
+    /* [인터뷰 실행 로직: API 오류 대응 강화] */
     async function startInterview() {
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
@@ -339,11 +337,17 @@
         return;
       }
 
+      // 오디오 트랙 및 다운로드 초기화 
+      audioPlayer.removeAttribute('src');
+      audioPlayer.classList.add('hidden');
+      downloadLink.classList.add('hidden');
+
       try {
         setLoading(true);
         resultBox.classList.add('hidden');
         statusBox.textContent = `${selectedName} 장군에게 전령을 보내는 중입니다...`;
 
+        // 1. 대화(Chat) 요청 전송
         const chatResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -355,13 +359,20 @@
         });
 
         const chatData = await chatResponse.json();
-        if (chatData.error) throw new Error(chatData.error);
-        if (!chatData.answer) throw new Error('답변 데이터가 유실되었습니다.');
+        
+        // 💡 API Key 등의 이유로 스크립트 에러 발생 시 처리
+        if (chatData.error) {
+          throw new Error(chatData.error);
+        }
+        if (!chatData.answer) {
+          throw new Error('답변 데이터가 유실되었습니다.');
+        }
 
         currentAnswerText = chatData.answer;
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
+        // 2. 음성합성(TTS) 요청 전송
         statusBox.textContent = '목소리를 불러오고 있습니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -375,26 +386,37 @@
 
         const ttsData = await ttsResponse.json();
         if (ttsData.error) throw new Error(ttsData.error);
-        if (!ttsData.audioBase64) throw new Error('음성 생성에 실패했습니다.');
-
-        const audioUrl = base64ToAudioUrl(ttsData.audioBase64, 'audio/mpeg');
-        audioPlayer.src = audioUrl;
-        downloadLink.href = audioUrl;
-        downloadLink.download = `interview-${selectedName}.mp3`;
+        
+        if (ttsData.audioBase64) {
+          const audioUrl = base64ToAudioUrl(ttsData.audioBase64, 'audio/mpeg');
+          audioPlayer.src = audioUrl;
+          audioPlayer.classList.remove('hidden');
+          downloadLink.href = audioUrl;
+          downloadLink.download = `interview-${selectedName}.mp3`;
+          downloadLink.classList.remove('hidden');
+          audioPlayer.play();
+        }
 
         resultBox.classList.remove('hidden');
         statusBox.textContent = '대화가 완수되었습니다.';
-        audioPlayer.play();
 
       } catch (error) {
         console.error(error);
-        statusBox.textContent = '교신 실패';
-        alert('인터뷰 도중 오류가 발생했습니다.\n\n' + error.message);
+        statusBox.textContent = '교신 실패 (API 키 오류 또는 한도 초과)';
+        
+        // 💡 핵심 수정 부분: API 연동에 실패하더라도 입력 창의 질문과 에러 로그를 띄우고 저장할 수 있게 유도
+        currentAnswerText = `[시스템 알림]: OpenAI API 호출 실패.\n원인: ${error.message}\n\n사용자 질문 내용:\n${question}`;
+        answerTitle.textContent = `⚠️ 통신 실패 (${selectedName})`;
+        answerBox.textContent = currentAnswerText;
+        
+        resultBox.classList.remove('hidden');
+        alert('인터뷰 응답을 생성하지 못했습니다. 하지만 입력하신 질문 기록은 아래 [기록하기] 버튼을 통해 Firebase 사초에 수록할 수 있습니다.');
       } finally {
         setLoading(false);
       }
     }
 
+    /* [Firebase 연동: 데이터 적재 (C)] */
     async function addFirebaseData() {
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       if (!currentAnswerText) return;
@@ -421,6 +443,7 @@
       }
     }
 
+    /* [Firebase 연동: 데이터 불러오기 (R)] */
     async function loadData() {
       try {
         const response = await fetch(getEndpoint());
@@ -432,6 +455,7 @@
       }
     }
 
+    /* [Firebase 연동: 데이터 삭제 (D)] */
     async function deleteData(id) {
       if (!confirm('해당 사초를 영구히 폐기하시겠습니까?')) return;
 
@@ -444,6 +468,7 @@
       }
     }
 
+    /* [Firebase 연동: 데이터 수정 (U)] */
     async function updateData(id) {
       const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
       const editContent = document.getElementById(`edit-content-${id}`).value.trim();
@@ -472,6 +497,7 @@
       }
     }
 
+    /* [DOM 조작 헬퍼 함수군] */
     function renderData(data) {
       dataList.innerHTML = '';
       if (!data) {
@@ -546,7 +572,9 @@
       statusBox.textContent = '';
       currentAnswerText = "";
       audioPlayer.removeAttribute('src');
+      audioPlayer.classList.add('hidden');
       downloadLink.href = '#';
+      downloadLink.classList.add('hidden');
       resultBox.classList.add('hidden');
     }
 
