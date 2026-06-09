@@ -1,263 +1,556 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>북방의 거인들: AI 역사 인터뷰</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; background: linear-gradient(135deg, #cfd8dc, #eceff1); font-family: 'Malgun Gothic', sans-serif; color: #263238; }
-        .container { width: min(850px, 95%); margin: 30px auto; background: #ffffff; border-radius: 20px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #1a237e; margin-bottom: 5px; }
-        .subtitle { text-align: center; color: #546e7a; margin-bottom: 30px; font-size: 15px; }
-        .hidden { display: none; }
-        
-        .auth-box { max-width: 400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
-        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #cfd8dc; border-radius: 10px; font-size: 15px; outline: none; }
-        textarea { min-height: 120px; line-height: 1.6; }
-        button { border: none; border-radius: 10px; padding: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:hover { opacity: 0.85; transform: translateY(-1px); }
-        
-        .primary-btn { background: #3f51b5; color: white; }
-        .secondary-btn { background: #7986cb; color: white; }
-        .danger-btn { background: #e53935; color: white; padding: 5px 12px; font-size: 13px; }
-        
-        .chat-display { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 15px; padding: 20px; margin: 20px 0; min-height: 100px; white-space: pre-wrap; line-height: 1.8; }
-        .history-item { background: #fff; border: 1px solid #eceff1; padding: 18px; border-radius: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; background: #e8eaf6; padding: 12px 20px; border-radius: 12px; margin-bottom: 25px; }
-    </style>
-</head>
-<body>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>북방의 거인들: AI 역사 인터뷰</title>
+  <style>
+    * { box-sizing: border-box; }
 
-<div class="container">
-    <h1>북방의 거인들</h1>
-    <div class="subtitle">나만의 주제: 고구려와 발해의 영웅들을 AI로 만나다</div>
-
-    <section id="authSection">
-        <div class="auth-box">
-            <h2 style="text-align:center;">사관(史官) 입장</h2>
-            <input id="emailInput" type="email" placeholder="이메일 주소" />
-            <input id="passwordInput" type="password" placeholder="비밀번호 (6자리 이상)" />
-            <button class="primary-btn" id="loginBtn">로그인</button>
-            <button class="secondary-btn" id="signupBtn">회원가입</button>
-        </div>
-    </section>
-
-    <section id="mainSection" class="hidden">
-        <div class="top-bar">
-            <div>현재 사관: <strong id="userEmail"></strong></div>
-            <button id="logoutBtn" style="background:#546e7a; color:white; padding:5px 15px;">로그아웃</button>
-        </div>
-
-        <div class="setup">
-            <h3>대화할 인물 선택</h3>
-            <select id="personaSelect" style="margin-bottom:15px;">
-                <option value="고구려의 광개토대왕이야. 위엄 있는 말투로 고구려의 기상에 대해 답변해줘.">고구려 - 광개토대왕</option>
-                <option value="발해를 건국한 대조영이야. 고구려를 계승한 자부심을 담아 굳건하게 답변해줘.">발해 - 대조영</option>
-            </select>
-            
-            <textarea id="questionInput" placeholder="역사 속 인물에게 궁금한 점을 질문하세요..."></textarea>
-            <button id="askBtn" class="primary-btn" style="width:100%; margin-top:15px; height:50px;">질문 전송 및 음성 듣기</button>
-        </div>
-
-        <div id="status" style="margin:10px 0; color:#3949ab; font-weight:bold; font-size:14px; text-align:center;"></div>
-
-        <h3>인터뷰 답변</h3>
-        <div id="answerBox" class="chat-display">아직 기록된 대화가 없습니다.</div>
-        
-        <audio id="audioPlayer" controls class="hidden" style="width:100%; margin-bottom:20px;"></audio>
-
-        <button id="saveBtn" class="secondary-btn" style="width:100%;">이 대화를 '사초'에 기록하기 (DB 저장)</button>
-
-        <hr style="margin:40px 0; border:0; border-top:1px solid #eee;">
-
-        <div class="history-container">
-            <h3>나의 사초 (기록 보관소)</h3>
-            <div id="dataList"></div>
-        </div>
-    </section>
-</div>
-
-<script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, push, onValue, remove, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-
-    // Firebase 원본 설정
-    const firebaseConfig = {
-        apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
-        authDomain: "suhang-86f3f.firebaseapp.com",
-        databaseURL: "https://suhang-86f3f-default-rtdb.firebaseio.com",
-        projectId: "suhang-86f3f",
-        storageBucket: "suhang-86f3f.firebasestorage.app",
-        messagingSenderId: "412517168949",
-        appId: "1:412517168949:web:26766fd1b37b3fbd4f7e7c",
-        measurementId: "G-YDVD63CF7H"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const database = getDatabase(app);
-
-    // 새로 제공해주신 개인 계정용 Google Apps Script 우회 주소 반영 완료
-    const PROXY_URL = "https://script.google.com/macros/s/AKfycbxLQHRAytjw0l_C3TCEt3yvk7cC4dsnXSBnJj3kg4eGMFYov53V4z0EMuOGsZUeumvNCA/exec";
-
-    const authSection = document.getElementById('authSection');
-    const mainSection = document.getElementById('mainSection');
-    let currentUser = null;
-
-    /* [인증 기능] */
-    document.getElementById('signupBtn').addEventListener('click', async () => {
-        const email = document.getElementById('emailInput').value;
-        const pw = document.getElementById('passwordInput').value;
-        try { 
-            await createUserWithEmailAndPassword(auth, email, pw); 
-            alert("성공적으로 등록되었습니다."); 
-        } catch(e) { 
-            alert("가입 실패: " + e.message); 
-        }
-    });
-
-    document.getElementById('loginBtn').addEventListener('click', async () => {
-        const email = document.getElementById('emailInput').value;
-        const pw = document.getElementById('passwordInput').value;
-        try { 
-            await signInWithEmailAndPassword(auth, email, pw); 
-        } catch(e) { 
-            alert("로그인 실패: " + e.message); 
-        }
-    });
-
-    document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
-
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            currentUser = user;
-            authSection.classList.add('hidden');
-            mainSection.classList.remove('hidden');
-            document.getElementById('userEmail').textContent = user.email;
-            loadHistory(user.uid);
-        } else {
-            currentUser = null;
-            authSection.classList.remove('hidden');
-            mainSection.classList.add('hidden');
-        }
-    });
-
-    /* [구글 앱스 스크립트 기반 AI 연동 - Chat 및 TTS] */
-    document.getElementById('askBtn').addEventListener('click', async () => {
-        const question = document.getElementById('questionInput').value;
-        const persona = document.getElementById('personaSelect').value;
-        if(!question) return alert("질문을 입력해주세요.");
-
-        const status = document.getElementById('status');
-        status.textContent = "역사의 인물이 답하고 있습니다...";
-        
-        try {
-            // 1. 구글 우회 서버를 통해 GPT 질문 전송
-            const chatRes = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain'
-                },
-                body: JSON.stringify({ type: 'chat', persona: persona, question: question })
-            });
-            const chatData = await chatRes.json();
-            if(chatData.error) throw new Error(chatData.error);
-            
-            const answer = chatData.answer;
-            document.getElementById('answerBox').textContent = answer;
-
-            // 2. 구글 우회 서버를 통해 TTS 음성 바이너리 획득
-            status.textContent = "목소리를 불러오는 중입니다...";
-            const ttsRes = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain'
-                },
-                body: JSON.stringify({ type: 'tts', text: answer })
-            });
-            const ttsData = await ttsRes.json();
-            if(ttsData.error) throw new Error(ttsData.error);
-            
-            if(ttsData.audioBase64) {
-                const player = document.getElementById('audioPlayer');
-                player.src = `data:audio/mpeg;base64,${ttsData.audioBase64}`;
-                player.classList.remove('hidden');
-                player.play();
-            }
-
-            status.textContent = "인터뷰 완료.";
-        } catch(e) {
-            status.textContent = "오류 발생.";
-            alert("연동 실패: " + e.message + "\n구글 앱스 스크립트 배포 시 '액세스 권한: 모든 사용자(Anyone)'로 설정했는지 꼭 다시 확인해 주세요.");
-            console.error(e);
-        }
-    });
-
-    /* [데이터 연동: 인물 정보와 답변을 정제하여 Firebase 적재] */
-    document.getElementById('saveBtn').addEventListener('click', async () => {
-        if(!currentUser) return alert("로그인이 필요합니다.");
-        const answer = document.getElementById('answerBox').textContent;
-        
-        // 인물 옵션 박스의 이름 정확히 추출
-        const personaSelect = document.getElementById('personaSelect');
-        const personaName = personaSelect.options[personaSelect.selectedIndex].text;
-        
-        if(answer.includes("아직 기록된 대화가 없습니다")) return alert("기록할 내용이 없습니다.");
-
-        try {
-            const historyRef = ref(database, `users/${currentUser.uid}/items`);
-            const newItemRef = push(historyRef);
-            
-            // 인물명(name)과 답변내용(text)을 깔끔하게 나누어 매핑 저장
-            await set(newItemRef, {
-                name: personaName,
-                text: answer,
-                date: new Date().toLocaleString()
-            });
-            alert("사초에 성공적으로 기록되었습니다.");
-        } catch(e) {
-            alert("DB 저장 오류: " + e.message);
-        }
-    });
-
-    /* [기록 데이터 실시간 로드] */
-    function loadHistory(uid) {
-        const historyRef = ref(database, `users/${uid}/items`);
-        onValue(historyRef, (snapshot) => {
-            const data = snapshot.val();
-            const listDiv = document.getElementById('dataList');
-            listDiv.innerHTML = "";
-            if(!data) {
-                listDiv.innerHTML = "<p style='text-align:center; color:#999;'>기록이 없습니다.</p>";
-                return;
-            }
-            Object.entries(data).reverse().forEach(([id, item]) => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'history-item';
-                itemDiv.innerHTML = `
-                    <div style="display:flex; justify-content:space-between;">
-                        <strong>[${item.name}]</strong>
-                        <span style="font-size:12px; color:#999;">${item.date}</span>
-                    </div>
-                    <p style="margin:10px 0; white-space: pre-wrap;">${item.text}</p>
-                    <button class="danger-btn" onclick="window.deleteRecord('${id}')">삭제</button>
-                `;
-                listDiv.appendChild(itemDiv);
-            });
-        });
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #e3f2fd, #fce4ec);
+      font-family: Arial, sans-serif;
+      color: #333;
     }
 
-    /* [기록 데이터 삭제] */
-    window.deleteRecord = (id) => {
-        if(!currentUser) return;
-        if(confirm("기록을 사초에서 삭제하시겠습니까?")) {
-            remove(ref(database, `users/${currentUser.uid}/items/${id}`))
-                .then(() => alert("삭제되었습니다."))
-                .catch((e) => alert("삭제 실패: " + e.message));
+    .container {
+      width: min(900px, 92%);
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.16);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      text-align: center;
+      font-size: 28px;
+      color: #1a237e;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #546e7a;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .info {
+      padding: 14px;
+      margin-bottom: 20px;
+      border-radius: 14px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .option-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    select, input {
+      height: 44px;
+      padding: 0 12px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      padding: 16px;
+      border: 1px solid #ddd;
+      border-radius: 16px;
+      font-size: 16px;
+      line-height: 1.5;
+      outline: none;
+      font-family: Arial, sans-serif;
+    }
+
+    textarea:focus, select:focus, input:focus {
+      border-color: #42a5f5;
+      box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.15);
+    }
+
+    .label {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 15px;
+      color: #263238;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    button, .download-link {
+      border: none;
+      border-radius: 12px;
+      padding: 0 18px;
+      height: 46px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: 0.15s;
+      font-weight: bold;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button:hover, .download-link:hover {
+      transform: translateY(-2px);
+      opacity: 0.9;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      transform: none;
+    }
+
+    .make-btn { background: #42a5f5; color: white; }
+    .clear-btn { background: #b0bec5; color: white; }
+    .save-btn { background: #7e57c2; color: white; }
+    .refresh-btn { background: #66bb6a; color: white; margin-bottom: 16px; }
+    .edit-btn { background: #ffca28; color: #333; }
+    .delete-btn { background: #ef5350; color: white; }
+    .cancel-btn { background: #b0bec5; color: white; }
+    .download-link { background: #00acc1; color: white; }
+
+    .hidden { display: none; }
+
+    .status {
+      min-height: 24px;
+      margin-top: 14px;
+      color: #3949ab;
+      font-weight: bold;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .result-box {
+      margin-top: 20px;
+      padding: 18px;
+      border-radius: 18px;
+      background: #f7f9fb;
+      border: 1px solid #edf1f5;
+    }
+
+    .chat-display {
+      background: #ffffff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 15px;
+      margin-top: 8px;
+      min-height: 80px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 16px;
+      border-radius: 16px;
+      background: #f7f9fb;
+      border: 1px solid #edf1f5;
+    }
+
+    .item-title {
+      margin: 0 0 6px;
+      font-size: 17px;
+      font-weight: bold;
+      color: #1a237e;
+    }
+
+    .item-content {
+      margin: 0;
+      color: #455a64;
+      line-height: 1.5;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+
+    .item-date {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #90a4ae;
+    }
+
+    .item-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .edit-box {
+      display: grid;
+      grid-template-columns: 1fr 2fr auto auto;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 30px;
+      color: #888;
+      background: #f7f9fb;
+      border-radius: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .option-box, .edit-box { grid-template-columns: 1fr; }
+      .item { grid-template-columns: 1fr; }
+      .button-row, .item-actions { justify-content: stretch; }
+      button, .download-link { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>북방의 거인들</h1>
+    <div class="subtitle">고구려와 발해의 영웅들을 AI 인터뷰와 목소리로 만나다</div>
+
+    <div class="info">
+      역사적 인물을 고르고 질문을 입력하면 AI 인터뷰 답변과 함께 생생한 음성을 들을 수 있습니다.<br />
+      완성된 답변은 아래 '사초(역사 기록)' 보관소에 안전하게 기록(Firebase DB)하고 관리할 수 있습니다.
+    </div>
+
+    <div class="option-box">
+      <div>
+        <div class="label">인터뷰 대상 선택</div>
+        <select id="personaSelect">
+          <option value="고구려의 광개토대왕이야. 위엄 있고 당당한 말투로 고구려의 기상과 영토 확장에 대해 답변해줘.">고구려 - 광개토대왕</option>
+          <option value="발해를 건국한 대조영이야. 고구려를 계승한 자부심을 담아 완강하고 굳건하게 답변해줘.">발해 - 대조영</option>
+        </select>
+      </div>
+      <div>
+        <div class="label">말투 속도</div>
+        <input id="speedInput" type="number" min="0.25" max="4.0" step="0.05" value="1.0" placeholder="속도" />
+      </div>
+    </div>
+
+    <div>
+      <div class="label">인물에게 보낼 질문</div>
+      <textarea id="questionInput" placeholder="역사 속 주인공에게 궁금한 점을 질문하세요... (예: 백성을 다스릴 때 가장 중요하게 생각한 가치는 무엇입니까?)"></textarea>
+    </div>
+
+    <div class="button-row">
+      <button class="clear-btn" id="clearBtn">초기화</button>
+      <button class="make-btn" id="makeBtn">질문 전송 및 음성 듣기</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="resultBox" class="result-box hidden">
+      <div class="label" id="answerTitle">인터뷰 답변 기록</div>
+      <div id="answerBox" class="chat-display"></div>
+      <audio id="audioPlayer" controls></audio>
+      <div class="button-row">
+        <a id="downloadLink" class="download-link" href="#" download="interview.mp3">mp3 다운로드</a>
+        <button class="save-btn" id="saveBtn">이 대화를 사초(DB)에 기록하기</button>
+      </div>
+    </div>
+
+    <hr style="margin: 40px 0; border: 0; border-top: 1px solid #cfd8dc;" />
+
+    <div>
+      <h3 style="color:#1a237e; margin-bottom:10px;">나의 사초 (역사 기록 보관소)</h3>
+      <button class="refresh-btn" onclick="loadData()">사초 새로고침</button>
+      <div id="dataList" class="list"></div>
+    </div>
+  </div>
+
+  <script>
+    // 구글 앱스 스크립트 웹앱 주소
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoM0bZsWJ4lES4EXSx09myjz08T2akHlYavU3ZqBWmLZEZrTUIgpt3TPlW67UYC2EPrg/exec';
+    
+    // 💡 질문하신 본인의 Firebase Realtime Database 주소로 완벽 수정 완료!
+    const DATABASE_URL = 'https://suhang-86f3f-default-rtdb.firebaseio.com';
+    const DATA_PATH = 'items';
+
+    const questionInput = document.getElementById('questionInput');
+    const personaSelect = document.getElementById('personaSelect');
+    const speedInput = document.getElementById('speedInput');
+    const makeBtn = document.getElementById('makeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const statusBox = document.getElementById('status');
+    const resultBox = document.getElementById('resultBox');
+    const answerBox = document.getElementById('answerBox');
+    const answerTitle = document.getElementById('answerTitle');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const downloadLink = document.getElementById('downloadLink');
+    const dataList = document.getElementById('dataList');
+
+    let currentAnswerText = ""; 
+
+    makeBtn.addEventListener('click', startInterview);
+    clearBtn.addEventListener('click', clearPage);
+    saveBtn.addEventListener('click', addFirebaseData);
+
+    questionInput.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' && event.ctrlKey) {
+        startInterview();
+      }
+    });
+
+    function getEndpoint(path = '') {
+      const cleanPath = path ? `/${path}` : '';
+      return `${DATABASE_URL}/${DATA_PATH}${cleanPath}.json`;
+    }
+
+    async function startInterview() {
+      const question = questionInput.value.trim();
+      const persona = personaSelect.value;
+      const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
+      const speed = Number(speedInput.value || 1.0);
+
+      if (!question) {
+        alert('역사 속 인물에게 보낼 질문을 입력해 주세요.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        resultBox.classList.add('hidden');
+        statusBox.textContent = `${selectedName} 장군에게 전령을 보내는 중입니다...`;
+
+        const chatResponse = await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            type: 'chat',
+            persona: persona,
+            question: question
+          })
+        });
+
+        const chatData = await chatResponse.json();
+        if (chatData.error) throw new Error(chatData.error);
+        if (!chatData.answer) throw new Error('답변 데이터가 유실되었습니다.');
+
+        currentAnswerText = chatData.answer;
+        answerTitle.textContent = `📜 ${selectedName}의 답변`;
+        answerBox.textContent = currentAnswerText;
+
+        statusBox.textContent = '목소리를 불러오고 있습니다...';
+        const ttsResponse = await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            type: 'tts',
+            text: currentAnswerText,
+            speed: speed
+          })
+        });
+
+        const ttsData = await ttsResponse.json();
+        if (ttsData.error) throw new Error(ttsData.error);
+        if (!ttsData.audioBase64) throw new Error('음성 생성에 실패했습니다.');
+
+        const audioUrl = base64ToAudioUrl(ttsData.audioBase64, 'audio/mpeg');
+        audioPlayer.src = audioUrl;
+        downloadLink.href = audioUrl;
+        downloadLink.download = `interview-${selectedName}.mp3`;
+
+        resultBox.classList.remove('hidden');
+        statusBox.textContent = '대화가 완수되었습니다.';
+        audioPlayer.play();
+
+      } catch (error) {
+        console.error(error);
+        statusBox.textContent = '교신 실패';
+        alert('인터뷰 도중 오류가 발생했습니다.\n\n' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function addFirebaseData() {
+      const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
+      if (!currentAnswerText) return;
+
+      const newItem = {
+        title: selectedName, 
+        content: currentAnswerText, 
+        createdAt: new Date().toLocaleString('ko-KR')
+      };
+
+      try {
+        statusBox.textContent = '사초를 조정에 상소하는 중...';
+        await fetch(getEndpoint(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newItem)
+        });
+
+        alert('기록 보관소에 성공적으로 수록되었습니다.');
+        await loadData();
+      } catch (error) {
+        console.error(error);
+        alert('Firebase 보관 실패');
+      }
+    }
+
+    async function loadData() {
+      try {
+        const response = await fetch(getEndpoint());
+        const data = await response.json();
+        renderData(data);
+      } catch (error) {
+        console.error(error);
+        dataList.innerHTML = '<div class="empty">기록을 불러오지 못했습니다. DB 주소 혹은 보안 규칙을 체크하세요.</div>';
+      }
+    }
+
+    async function deleteData(id) {
+      if (!confirm('해당 사초를 영구히 폐기하시겠습니까?')) return;
+
+      try {
+        await fetch(getEndpoint(id), { method: 'DELETE' });
+        await loadData();
+      } catch (error) {
+        console.error(error);
+        alert('삭제에 실패했습니다.');
+      }
+    }
+
+    async function updateData(id) {
+      const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
+      const editContent = document.getElementById(`edit-content-${id}`).value.trim();
+
+      if (!editTitle || !editContent) {
+        alert('내용을 모두 채워넣어 주세요.');
+        return;
+      }
+
+      const updatedItem = {
+        title: editTitle,
+        content: editContent,
+        updatedAt: new Date().toLocaleString('ko-KR')
+      };
+
+      try {
+        await fetch(getEndpoint(id), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedItem)
+        });
+        await loadData();
+      } catch (error) {
+        console.error(error);
+        alert('수정에 실패했습니다.');
+      }
+    }
+
+    function renderData(data) {
+      dataList.innerHTML = '';
+      if (!data) {
+        dataList.innerHTML = '<div class="empty">아직 보관된 역사 기록이 없습니다.</div>';
+        return;
+      }
+
+      Object.entries(data).reverse().forEach(([id, item]) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.id = `item-${id}`;
+
+        div.innerHTML = `
+          <div>
+            <p class="item-title">${escapeHTML(item.title || '')}</p>
+            <p class="item-content">${escapeHTML(item.content || '')}</p>
+            <div class="item-date">
+              기록일: ${item.createdAt || '-'} ${item.updatedAt ? ` / 수정일: ${item.updatedAt}` : ''}
+            </div>
+          </div>
+          <div class="item-actions">
+            <button class="edit-btn" onclick="showEditForm('${id}', '${escapeForAttribute(item.title || '')}', '${escapeForAttribute(item.content || '')}')">수정</button>
+            <button class="delete-btn" onclick="deleteData('${id}')">삭제</button>
+          </div>
+        `;
+        dataList.appendChild(div);
+      });
+    }
+
+    function showEditForm(id, title, content) {
+      const itemBox = document.getElementById(`item-${id}`);
+      itemBox.innerHTML = `
+        <div class="edit-box">
+          <input id="edit-title-${id}" type="text" value="${title}" />
+          <input id="edit-content-${id}" type="text" value="${content}" />
+          <button class="save-btn" onclick="updateData('${id}')">저장</button>
+          <button class="cancel-btn" onclick="loadData()">취소</button>
+        </div>
+      `;
+    }
+
+    function base64ToAudioUrl(base64, mimeType) {
+      const byteCharacters = atob(base64);
+      const byteArrays = [];
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
         }
-    };
-</script>
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+      return URL.createObjectURL(new Blob(byteArrays, { type: mimeType }));
+    }
+
+    function escapeHTML(text) {
+      return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+    }
+
+    function escapeForAttribute(text) {
+      return escapeHTML(text).replaceAll('`', '&#096;');
+    }
+
+    function setLoading(isLoading) {
+      makeBtn.disabled = isLoading;
+      makeBtn.textContent = isLoading ? '소통 중...' : '질문 전송 및 음성 듣기';
+    }
+
+    function clearPage() {
+      questionInput.value = '';
+      statusBox.textContent = '';
+      currentAnswerText = "";
+      audioPlayer.removeAttribute('src');
+      downloadLink.href = '#';
+      resultBox.classList.add('hidden');
+    }
+
+    loadData();
+  </script>
 </body>
 </html>
