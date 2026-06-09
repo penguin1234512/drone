@@ -321,14 +321,19 @@
   </div>
 
   <script>
-    // 💡 [필수] 본인의 Firebase 앱 설정 구성 정보
-    // (Realtime Database 주소가 현재 연동되어 있으므로 프로젝트 ID는 suhang-86f3f 입니다.)
+    // 💡 전달해주신 본인의 Firebase Web 앱 실제 키값이 완벽 주입되었습니다!
     const firebaseConfig = {
+      apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
+      authDomain: "suhang-86f3f.firebaseapp.com",
+      databaseURL: "https://suhang-86f3f-default-rtdb.firebaseio.com",
       projectId: "suhang-86f3f",
-      databaseURL: "https://suhang-86f3f-default-rtdb.firebaseio.com"
+      storageBucket: "suhang-86f3f.firebasestorage.app",
+      messagingSenderId: "412517168949",
+      appId: "1:412517168949:web:26766fd1b37b3fbd4f7e7c",
+      measurementId: "G-YDVD63CF7H"
     };
     
-    // Firebase 초기화
+    // Firebase 초기화 진행
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
@@ -337,7 +342,7 @@
     const DATA_PATH = 'items';
     const USER_PATH = 'users';
 
-    // UI 요소 매핑
+    // UI 엘리먼트 수집
     const authContainer = document.getElementById('authContainer');
     const mainContainer = document.getElementById('mainContainer');
     const authEmail = document.getElementById('authEmail');
@@ -362,17 +367,23 @@
     const dataList = document.getElementById('dataList');
 
     let currentAnswerText = ""; 
-    let loggedInUser = null; // 현재 인증 성공한 유저 정보 보관 객체
+    let loggedInUser = null; 
 
-    // 인증 관련 이벤트 바인딩
+    // 인증 핸들러 등록
     signUpBtn.addEventListener('click', handleSignUp);
     logInBtn.addEventListener('click', handleLogIn);
     logOutBtn.addEventListener('click', handleLogOut);
 
-    // 기능 관련 이벤트 바인딩
+    // 인터뷰 코어 기능 핸들러 등록
     makeBtn.addEventListener('click', startInterview);
     clearBtn.addEventListener('click', clearPage);
     saveBtn.addEventListener('click', addFirebaseData);
+
+    questionInput.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' && event.ctrlKey) {
+        startInterview();
+      }
+    });
 
     function getEndpoint(path = '') {
       const cleanPath = path ? `/${path}` : '';
@@ -384,53 +395,52 @@
       return `${DATABASE_URL}/${USER_PATH}${cleanPath}.json`;
     }
 
-    /* 🔐 [Authentication] 회원가입 로직 */
+    /* 🔐 회원가입 */
     async function handleSignUp() {
       const email = authEmail.value.trim();
       const password = authPassword.value.trim();
 
-      if(!email || !password) { alert('이메일과 비밀번호를 입력하세요.'); return; }
+      if(!email || !password) { alert('이메일과 비밀번호를 모두 입력하세요.'); return; }
       
       try {
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        alert('사관 임명(회원가입)이 완료되었습니다! 로그인 상태로 전환됩니다.');
+        await auth.createUserWithEmailAndPassword(email, password);
+        alert('사관 임명이 완료되었습니다! 자동으로 로그인 처리됩니다.');
       } catch (error) {
         console.error(error);
-        alert('회원가입 실패: ' + error.message);
+        alert('회원가입 오류: ' + error.message);
       }
     }
 
-    /* 🔐 [Authentication] 로그인 로직 */
+    /* 🔐 로그인 */
     async function handleLogIn() {
       const email = authEmail.value.trim();
       const password = authPassword.value.trim();
 
-      if(!email || !password) { alert('이메일과 비밀번호를 입력하세요.'); return; }
+      if(!email || !password) { alert('이메일과 비밀번호를 모두 입력하세요.'); return; }
 
       try {
         await auth.signInWithEmailAndPassword(email, password);
-        alert('청사에 입정하셨습니다.');
+        alert('청사에 정상적으로 입정하셨습니다.');
       } catch (error) {
         console.error(error);
-        alert('로그인 실패: ' + error.message);
+        alert('로그인 오류: ' + error.message);
       }
     }
 
-    /* 🔐 [Authentication] 로그아웃 로직 */
+    /* 🔐 로그아웃 */
     async function handleLogOut() {
       try {
         await auth.signOut();
-        alert('안전하게 퇴정하셨습니다.');
+        alert('안전하게 퇴정 처리되었습니다.');
         clearPage();
       } catch (error) {
-        alert('로그아웃 오류');
+        alert('로그아웃 수행 오류');
       }
     }
 
-    /* 🔐 [핵심] 인증 상태 실시간 감지 감시자 (Observer) */
+    /* 🔐 인증 상태 모니터링 체계 (onAuthStateChanged) */
     auth.onAuthStateChanged(async (user) => {
       if (user) {
-        // 로그인 성공 시
         loggedInUser = user;
         currentUserEmail.textContent = user.email;
         
@@ -440,7 +450,7 @@
         authEmail.value = "";
         authPassword.value = "";
 
-        // 로그인 순간 Realtime Database의 'users/유저UID'에 기록 자동 전송 
+        // 💡 로그인 성공하는 즉시 Realtime Database의 'users' 노드 하위에 유저 데이터 기록
         try {
           const syncData = {
             uid: user.uid,
@@ -452,11 +462,10 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(syncData)
           });
-        } catch(e) { console.error("Realtime DB 유저 동기화 실패", e); }
+        } catch(e) { console.error("Realtime DB 유저 갱신 실패", e); }
 
         loadData();
       } else {
-        // 로그아웃 상태 시
         loggedInUser = null;
         authContainer.classList.remove('hidden');
         mainContainer.classList.add('hidden');
@@ -464,32 +473,32 @@
       }
     });
 
-    /* 📜 기능 로직: 질문 및 AI 인터뷰 가동 */
+    /* 📜 기능 로직: 역사 인물 인터뷰 진행 */
     async function startInterview() {
-      if (!loggedInUser) { alert('로그인이 해제되었습니다.'); return; }
+      if (!loggedInUser) { alert('세션이 유효하지 않습니다. 다시 로그인하세요.'); return; }
       
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       const speed = Number(speedInput.value || 1.0);
 
-      if (!question) { alert('역사 속 인물에게 보낼 질문을 입력해 주세요.'); return; }
+      if (!question) { alert('인물에게 던질 질문을 채워주세요.'); return; }
 
       audioPlayer.removeAttribute('src');
       audioPlayer.classList.add('hidden');
       downloadLink.classList.add('hidden');
 
-      // 선제적 무조건 질문 백업 적재 (인증된 사관 정보 포함)
+      // 💡 [선제 조치] 에러 유무 상관없이 질문 내용을 사초에 먼저 실시간 적재 (인증 유저 정보 포함)
       try {
         setLoading(true);
         resultBox.classList.add('hidden');
-        statusBox.textContent = '사초에 질문 기록을 먼저 남기는 중...';
+        statusBox.textContent = '사초에 질문 기록을 적는 중...';
         
         const backupItem = {
           title: `${selectedName}에 대한 질문`,
-          content: `[질문 내용]: ${question}\n(※ AI 답변 대기 중 에러 발생)`,
-          author: loggedInUser.email, // 가입된 이메일 기록
-          authorUid: loggedInUser.uid, // 고유 식별자 기록
+          content: `[질문 내용]: ${question}\n(※ AI 답변 수신 전 대기 중 혹은 에러)`,
+          author: loggedInUser.email,
+          authorUid: loggedInUser.uid,
           createdAt: new Date().toLocaleString('ko-KR')
         };
         
@@ -499,11 +508,11 @@
           body: JSON.stringify(backupItem)
         });
         await loadData();
-      } catch (fbError) { console.error(fbError); }
+      } catch (fbError) { console.error("임시 백업 적재 실패", fbError); }
 
-      // OpenAI 연동부 실행
+      // OpenAI 챗봇 연동 및 텍스트 송수신
       try {
-        statusBox.textContent = `${selectedName} 장군에게 전령을 보내는 중입니다...`;
+        statusBox.textContent = `${selectedName} 장군에게 전령을 보냈습니다. 답변을 기다리는 중...`;
 
         const chatResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -519,7 +528,8 @@
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        statusBox.textContent = '목소리를 불러오고 있습니다...';
+        // TTS 음성 변환 엔진 호출
+        statusBox.textContent = '목소리를 조율하여 불러오는 중입니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -540,12 +550,12 @@
         }
 
         resultBox.classList.remove('hidden');
-        statusBox.textContent = '대화가 완수되었습니다.';
+        statusBox.textContent = '인터뷰 프로토콜이 완료되었습니다.';
       } catch (error) {
         console.error(error);
-        statusBox.textContent = '교신 실패 (API 오류)';
-        currentAnswerText = `[시스템 알림]: OpenAI API 호출 실패.\n원인: ${error.message}\n\n사용자 질문:\n${question}`;
-        answerTitle.textContent = `⚠️ 통신 실패 (${selectedName})`;
+        statusBox.textContent = '교신 실패 (오류 발생)';
+        currentAnswerText = `[시스템 안내]: OpenAI API 연동 실패.\n원인: ${error.message}\n\n질문 본문:\n${question}`;
+        answerTitle.textContent = `⚠️ 통신 차단됨 (${selectedName})`;
         answerBox.textContent = currentAnswerText;
         resultBox.classList.remove('hidden');
       } finally {
@@ -553,6 +563,7 @@
       }
     }
 
+    /* 💡 최종 답변 저장 */
     async function addFirebaseData() {
       if (!loggedInUser) return;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
@@ -567,40 +578,43 @@
       };
 
       try {
-        statusBox.textContent = '사초를 조정에 상소하는 중...';
+        statusBox.textContent = '사초 기록 보관 절차 진행 중...';
         await fetch(getEndpoint(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newItem)
         });
-        alert('기록 보관소에 정식 수록되었습니다.');
+        alert('역사 보관소(DB)에 안전하게 기록 수록되었습니다.');
         await loadData();
-      } catch (error) { alert('보관 실패'); }
+      } catch (error) { alert('Firebase 저장 실패'); }
     }
 
+    /* 💡 Realtime Database 사초 전체 로드 */
     async function loadData() {
       try {
         const response = await fetch(getEndpoint());
         const data = await response.json();
         renderData(data);
       } catch (error) {
-        dataList.innerHTML = '<div class="empty">기록 로드 실패</div>';
+        dataList.innerHTML = '<div class="empty">데이터 로드에 실패했습니다.</div>';
       }
     }
 
+    /* 💡 특정 기록 폐기(삭제) */
     async function deleteData(id) {
-      if (!confirm('해당 사초를 영구히 폐기하시겠습니까?')) return;
+      if (!confirm('해당 기록을 영구히 결단(삭제)하시겠습니까?')) return;
       try {
         await fetch(getEndpoint(id), { method: 'DELETE' });
         await loadData();
-      } catch (error) { alert('삭제 실패'); }
+      } catch (error) { alert('삭제 처리에 실패했습니다.'); }
     }
 
+    /* 💡 기록 정보 수정 */
     async function updateData(id) {
       const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
       const editContent = document.getElementById(`edit-content-${id}`).value.trim();
 
-      if (!editTitle || !editContent) { alert('내용을 채워주세요.'); return; }
+      if (!editTitle || !editContent) { alert('모든 칸을 채워넣어 주세요.'); return; }
 
       const updatedItem = {
         title: editTitle,
@@ -615,12 +629,13 @@
           body: JSON.stringify(updatedItem)
         });
         await loadData();
-      } catch (error) { alert('수정 실패'); }
+      } catch (error) { alert('수정 처리에 실패했습니다.'); }
     }
 
+    /* 💡 화면에 역사 리스트 드로잉 */
     function renderData(data) {
       dataList.innerHTML = '';
-      if (!data) { dataList.innerHTML = '<div class="empty">아직 보관된 역사 기록이 없습니다.</div>'; return; }
+      if (!data) { dataList.innerHTML = '<div class="empty">보관된 역사 기록이 존재하지 않습니다.</div>'; return; }
 
       Object.entries(data).reverse().forEach(([id, item]) => {
         const div = document.createElement('div');
@@ -669,10 +684,12 @@
     function escapeHTML(text) {
       return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
     }
+    
     function escapeForAttribute(text) { return escapeHTML(text).replaceAll('`', '&#096;'); }
+    
     function setLoading(isLoading) {
       makeBtn.disabled = isLoading;
-      makeBtn.textContent = isLoading ? '소통 중...' : '질문 전송 및 음성 듣기';
+      makeBtn.textContent = isLoading ? '장군과 소통 중...' : '질문 전송 및 음성 듣기';
     }
 
     function clearPage() {
