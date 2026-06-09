@@ -48,6 +48,23 @@
       line-height: 1.6;
     }
 
+    /* 💡 로그인 영역 스타일 추가 */
+    .login-box {
+      background: #f1f3f4;
+      padding: 16px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .login-box input {
+      flex: 1;
+      min-width: 150px;
+    }
+
     .option-box {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -130,6 +147,7 @@
     .edit-btn { background: #ffca28; color: #333; }
     .delete-btn { background: #ef5350; color: white; }
     .cancel-btn { background: #b0bec5; color: white; }
+    .login-btn { background: #1a237e; color: white; }
     .download-link { background: #00acc1; color: white; }
 
     .hidden { display: none; }
@@ -239,6 +257,13 @@
     <h1>북방의 거인들</h1>
     <div class="subtitle">고구려와 발해의 영웅들을 AI 인터뷰와 목소리로 만나다</div>
 
+    <div class="login-box">
+      <div style="font-weight: bold; font-size: 14px; color: #1a237e;">사관 로그인:</div>
+      <input id="userIdInput" type="text" placeholder="사용자 ID (예: penguin123)" />
+      <input id="userNameInput" type="text" placeholder="사용자 이름 (예: 홍길동)" />
+      <button class="login-btn" id="loginBtn">기록 인증</button>
+    </div>
+
     <div class="info">
       역사적 인물을 고르고 질문을 입력하면 AI 인터뷰 답변과 함께 생생한 음성을 들을 수 있습니다.<br />
       완성된 답변은 아래 '사초(역사 기록)' 보관소에 안전하게 기록(Firebase DB)하고 관리할 수 있습니다.
@@ -293,6 +318,13 @@
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoM0bZsWJ4lES4EXSx09myjz08T2akHlYavU3ZqBWmLZEZrTUIgpt3TPlW67UYC2EPrg/exec';
     const DATABASE_URL = 'https://suhang-86f3f-default-rtdb.firebaseio.com';
     const DATA_PATH = 'items';
+    
+    // 💡 유저 정보를 전송할 경로 정의
+    const USER_PATH = 'users';
+
+    const userIdInput = document.getElementById('userIdInput');
+    const userNameInput = document.getElementById('userNameInput');
+    const loginBtn = document.getElementById('loginBtn');
 
     const questionInput = document.getElementById('questionInput');
     const personaSelect = document.getElementById('personaSelect');
@@ -310,6 +342,8 @@
 
     let currentAnswerText = ""; 
 
+    // 이벤트 리스너 연결
+    loginBtn.addEventListener('click', loginAndSaveUser);
     makeBtn.addEventListener('click', startInterview);
     clearBtn.addEventListener('click', clearPage);
     saveBtn.addEventListener('click', addFirebaseData);
@@ -325,7 +359,46 @@
       return `${DATABASE_URL}/${DATA_PATH}${cleanPath}.json`;
     }
 
-    /* 💡 [수정 핵심] 질문 전송 즉시 API 에러 유무 상관없이 Firebase에 먼저 적재하는 방식 */
+    // 💡 유저 정보 전송용 엔드포인트 생성 함수
+    function getUserEndpoint(userId = '') {
+      const cleanPath = userId ? `/${userId}` : '';
+      return `${DATABASE_URL}/${USER_PATH}${cleanPath}.json`;
+    }
+
+    /* 💡 [신규] 로그인 버튼 클릭 시 Firebase의 'users' 노드로 ID와 유저 정보 전송 */
+    async function loginAndSaveUser() {
+      const userId = userIdInput.value.trim();
+      const userName = userNameInput.value.trim();
+
+      if (!userId || !userName) {
+        alert('사용자 ID와 이름을 모두 입력해주세요.');
+        return;
+      }
+
+      const userData = {
+        id: userId,
+        name: userName,
+        lastLogin: new Date().toLocaleString('ko-KR')
+      };
+
+      try {
+        statusBox.textContent = '사관 정보를 Firebase에 등록하는 중...';
+        
+        // 특정 사용자 ID를 키값으로 지정하여 덮어쓰기(PUT) 방식으로 깔끔하게 정렬 저장
+        await fetch(getUserEndpoint(userId), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userData)
+        });
+
+        alert(`인증 성공! 사관 [${userName}]님의 정보가 users 데이터베이스에 기록되었습니다.`);
+        statusBox.textContent = '사관 인증 완료';
+      } catch (error) {
+        console.error("유저 정보 전송 실패:", error);
+        alert('Firebase 유저 정보 전송에 실패했습니다. DB 주소나 규칙을 확인하세요.');
+      }
+    }
+
     async function startInterview() {
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
@@ -341,33 +414,33 @@
       audioPlayer.classList.add('hidden');
       downloadLink.classList.add('hidden');
 
-      // 1 단계: 질문이 들어오면 무조건 Firebase에 먼저 백업 저장 실행!
       try {
         setLoading(true);
         resultBox.classList.add('hidden');
         statusBox.textContent = '사초에 질문 기록을 먼저 남기는 중...';
         
+        // 💡 저장할 때 작성자 정보(ID)가 입력되어 있다면 사초에도 함께 기록되도록 개선
+        const authorId = userIdInput.value.trim() || 'anonymous';
+
         const backupItem = {
           title: `${selectedName}에 대한 질문`,
           content: `[질문 내용]: ${question}\n(※ AI 답변 대기 중 에러 발생)`,
+          author: authorId,
           createdAt: new Date().toLocaleString('ko-KR')
         };
         
-        // Firebase에 POST 요청 전송
         await fetch(getEndpoint(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(backupItem)
         });
         
-        // 하단 리스트 실시간 갱신
         await loadData();
         
       } catch (fbError) {
         console.error("Firebase 사전 기록 실패:", fbError);
       }
 
-      // 2 단계: OpenAI 연동 및 구글 앱스 스크립트 실행
       try {
         statusBox.textContent = `${selectedName} 장군에게 전령을 보내는 중입니다...`;
 
@@ -436,9 +509,12 @@
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       if (!currentAnswerText) return;
 
+      const authorId = userIdInput.value.trim() || 'anonymous';
+
       const newItem = {
         title: selectedName, 
         content: currentAnswerText, 
+        author: authorId, // 💡 글 작성자 매핑 추가
         createdAt: new Date().toLocaleString('ko-KR')
       };
 
@@ -521,9 +597,10 @@
         div.className = 'item';
         div.id = `item-${id}`;
 
+        // 💡 리스트 출력 시 작성자(author) 정보도 가시적으로 함께 표기되도록 수정
         div.innerHTML = `
           <div>
-            <p class="item-title">${escapeHTML(item.title || '')}</p>
+            <p class="item-title">${escapeHTML(item.title || '')} <span style="font-size:12px; color:#7e57c2; font-weight:normal;">[기록 사관: ${escapeHTML(item.author || '익명')}]</span></p>
             <p class="item-content">${escapeHTML(item.content || '')}</p>
             <div class="item-date">
               기록일: ${item.createdAt || '-'} ${item.updatedAt ? ` / 수정일: ${item.updatedAt}` : ''}
