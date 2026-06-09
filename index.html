@@ -325,7 +325,7 @@
       return `${DATABASE_URL}/${DATA_PATH}${cleanPath}.json`;
     }
 
-    /* [인터뷰 실행 로직: API 오류 대응 강화] */
+    /* 💡 [수정 핵심] 질문 전송 즉시 API 에러 유무 상관없이 Firebase에 먼저 적재하는 방식 */
     async function startInterview() {
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
@@ -337,17 +337,40 @@
         return;
       }
 
-      // 오디오 트랙 및 다운로드 초기화 
       audioPlayer.removeAttribute('src');
       audioPlayer.classList.add('hidden');
       downloadLink.classList.add('hidden');
 
+      // 1 단계: 질문이 들어오면 무조건 Firebase에 먼저 백업 저장 실행!
       try {
         setLoading(true);
         resultBox.classList.add('hidden');
+        statusBox.textContent = '사초에 질문 기록을 먼저 남기는 중...';
+        
+        const backupItem = {
+          title: `${selectedName}에 대한 질문`,
+          content: `[질문 내용]: ${question}\n(※ AI 답변 대기 중 에러 발생)`,
+          createdAt: new Date().toLocaleString('ko-KR')
+        };
+        
+        // Firebase에 POST 요청 전송
+        await fetch(getEndpoint(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(backupItem)
+        });
+        
+        // 하단 리스트 실시간 갱신
+        await loadData();
+        
+      } catch (fbError) {
+        console.error("Firebase 사전 기록 실패:", fbError);
+      }
+
+      // 2 단계: OpenAI 연동 및 구글 앱스 스크립트 실행
+      try {
         statusBox.textContent = `${selectedName} 장군에게 전령을 보내는 중입니다...`;
 
-        // 1. 대화(Chat) 요청 전송
         const chatResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -360,19 +383,13 @@
 
         const chatData = await chatResponse.json();
         
-        // 💡 API Key 등의 이유로 스크립트 에러 발생 시 처리
-        if (chatData.error) {
-          throw new Error(chatData.error);
-        }
-        if (!chatData.answer) {
-          throw new Error('답변 데이터가 유실되었습니다.');
-        }
+        if (chatData.error) throw new Error(chatData.error);
+        if (!chatData.answer) throw new Error('답변 데이터가 유실되었습니다.');
 
         currentAnswerText = chatData.answer;
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        // 2. 음성합성(TTS) 요청 전송
         statusBox.textContent = '목소리를 불러오고 있습니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -402,21 +419,19 @@
 
       } catch (error) {
         console.error(error);
-        statusBox.textContent = '교신 실패 (API 키 오류 또는 한도 초과)';
+        statusBox.textContent = '교신 실패 (API 오류)';
         
-        // 💡 핵심 수정 부분: API 연동에 실패하더라도 입력 창의 질문과 에러 로그를 띄우고 저장할 수 있게 유도
         currentAnswerText = `[시스템 알림]: OpenAI API 호출 실패.\n원인: ${error.message}\n\n사용자 질문 내용:\n${question}`;
         answerTitle.textContent = `⚠️ 통신 실패 (${selectedName})`;
         answerBox.textContent = currentAnswerText;
         
         resultBox.classList.remove('hidden');
-        alert('인터뷰 응답을 생성하지 못했습니다. 하지만 입력하신 질문 기록은 아래 [기록하기] 버튼을 통해 Firebase 사초에 수록할 수 있습니다.');
+        alert('인터뷰 응답을 생성하지 못했습니다. 하지만 입력하신 질문 기록은 Firebase 사초에 실시간 자동 수록되었습니다.');
       } finally {
         setLoading(false);
       }
     }
 
-    /* [Firebase 연동: 데이터 적재 (C)] */
     async function addFirebaseData() {
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       if (!currentAnswerText) return;
@@ -443,7 +458,6 @@
       }
     }
 
-    /* [Firebase 연동: 데이터 불러오기 (R)] */
     async function loadData() {
       try {
         const response = await fetch(getEndpoint());
@@ -455,7 +469,6 @@
       }
     }
 
-    /* [Firebase 연동: 데이터 삭제 (D)] */
     async function deleteData(id) {
       if (!confirm('해당 사초를 영구히 폐기하시겠습니까?')) return;
 
@@ -468,7 +481,6 @@
       }
     }
 
-    /* [Firebase 연동: 데이터 수정 (U)] */
     async function updateData(id) {
       const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
       const editContent = document.getElementById(`edit-content-${id}`).value.trim();
@@ -497,7 +509,6 @@
       }
     }
 
-    /* [DOM 조작 헬퍼 함수군] */
     function renderData(data) {
       dataList.innerHTML = '';
       if (!data) {
