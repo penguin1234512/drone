@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>북방의 거인들: AI 역사 인터뷰</title>
     <style>
-        /* [필수요소: 나만의 주제가 드러나는 웹 디자인] */
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; background: linear-gradient(135deg, #cfd8dc, #eceff1); font-family: 'Malgun Gothic', sans-serif; color: #263238; }
         .container { width: min(850px, 95%); margin: 30px auto; background: #ffffff; border-radius: 20px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
@@ -13,7 +12,6 @@
         .subtitle { text-align: center; color: #546e7a; margin-bottom: 30px; font-size: 15px; }
         .hidden { display: none; }
         
-        /* 섹션 스타일 [4, 5] */
         .auth-box { max-width: 400px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #cfd8dc; border-radius: 10px; font-size: 15px; outline: none; }
         textarea { min-height: 120px; line-height: 1.6; }
@@ -33,9 +31,8 @@
 
 <div class="container">
     <h1>북방의 거인들</h1>
-    <div class="subtitle">나만의 주제: 고구려와 발해의 영웅들을 AI로 만나다 [3]</div>
+    <div class="subtitle">나만의 주제: 고구려와 발해의 영웅들을 AI로 만나다</div>
 
-    <!-- [필수요소: Firebase Authentication 로그인 기능] [6] -->
     <section id="authSection">
         <div class="auth-box">
             <h2 style="text-align:center;">사관(史官) 입장</h2>
@@ -46,7 +43,6 @@
         </div>
     </section>
 
-    <!-- 메인 인터페이스 (로그인 성공 시 표시) [7] -->
     <section id="mainSection" class="hidden">
         <div class="top-bar">
             <div>현재 사관: <strong id="userEmail"></strong></div>
@@ -61,7 +57,6 @@
             </select>
             
             <textarea id="questionInput" placeholder="역사 속 인물에게 궁금한 점을 질문하세요..."></textarea>
-            <!-- [필수요소: API 생성형 인공지능 연동 및 TTS 기능 활용] [3, 8, 9] -->
             <button id="askBtn" class="primary-btn" style="width:100%; margin-top:15px; height:50px;">질문 전송 및 음성 듣기</button>
         </div>
 
@@ -70,28 +65,25 @@
         <h3>인터뷰 답변</h3>
         <div id="answerBox" class="chat-display">아직 기록된 대화가 없습니다.</div>
         
-        <!-- [필수요소: TTS 재생기] [10] -->
         <audio id="audioPlayer" controls class="hidden" style="width:100%; margin-bottom:20px;"></audio>
 
-        <!-- [필수요소: Firebase 데이터 연동 - 저장 기능] [3, 11] -->
         <button id="saveBtn" class="secondary-btn" style="width:100%;">이 대화를 '사초'에 기록하기 (DB 저장)</button>
 
         <hr style="margin:40px 0; border:0; border-top:1px solid #eee;">
 
         <div class="history-container">
-            <h3>나의 사초 (기록 보관소 - CRUD) [12]</h3>
+            <h3>나의 사초 (기록 보관소)</h3>
             <div id="dataList"></div>
         </div>
     </section>
 </div>
 
-<!-- Firebase SDK 연동 [1, 13] -->
 <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, onValue, remove, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // [제공받은 본인 Firebase 설정 적용]
+    // 본인 Firebase 설정 적용 완료
     const firebaseConfig = {
         apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
         authDomain: "suhang-86f3f.firebaseapp.com",
@@ -107,27 +99,33 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // [소스 기반 Google Apps Script URL] [10, 14]
-    const CHAT_URL = "https://script.google.com/macros/s/AKfycbxTmD_aKFktnu5BcmOj0x84D15A5qOEkAbpoyJ7DEGzJR7UayIGwKLDL7nFhU3hbB_wVw/exec";
-    const TTS_URL = "https://script.google.com/macros/s/AKfycbxzvCeCidpIBm3Ez_AbmzTRrvzCkPa_7x-irAazDPzljPmuqjjHZOqXxfyS1vNh7tX1/exec";
+    // 사용자 OpenAI API KEY 연동
+    const OPENAI_API_KEY = "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";
 
     const authSection = document.getElementById('authSection');
     const mainSection = document.getElementById('mainSection');
     let currentUser = null;
 
-    /* [인증 기능: 로그인/회원가입] [15] */
+    /* [인증 기능: 로그인/회원가입] */
     document.getElementById('signupBtn').addEventListener('click', async () => {
         const email = document.getElementById('emailInput').value;
         const pw = document.getElementById('passwordInput').value;
-        try { await createUserWithEmailAndPassword(auth, email, pw); alert("성공적으로 등록되었습니다."); }
-        catch(e) { alert("가입 실패: " + e.message); }
+        try { 
+            await createUserWithEmailAndPassword(auth, email, pw); 
+            alert("성공적으로 등록되었습니다."); 
+        } catch(e) { 
+            alert("가입 실패: " + e.message); 
+        }
     });
 
     document.getElementById('loginBtn').addEventListener('click', async () => {
         const email = document.getElementById('emailInput').value;
         const pw = document.getElementById('passwordInput').value;
-        try { await signInWithEmailAndPassword(auth, email, pw); }
-        catch(e) { alert("로그인 실패: " + e.message); }
+        try { 
+            await signInWithEmailAndPassword(auth, email, pw); 
+        } catch(e) { 
+            alert("로그인 실패: " + e.message); 
+        }
     });
 
     document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
@@ -140,12 +138,13 @@
             document.getElementById('userEmail').textContent = user.email;
             loadHistory(user.uid);
         } else {
+            currentUser = null;
             authSection.classList.remove('hidden');
             mainSection.classList.add('hidden');
         }
     });
 
-    /* [AI 대화 및 TTS 연동] [16, 17] */
+    /* [OpenAI API 연동 - Chat 및 TTS] */
     document.getElementById('askBtn').addEventListener('click', async () => {
         const question = document.getElementById('questionInput').value;
         const persona = document.getElementById('personaSelect').value;
@@ -155,52 +154,84 @@
         status.textContent = "역사의 인물이 답하고 있습니다...";
         
         try {
-            // GPT 질문 전송
-            const chatRes = await fetch(CHAT_URL, {
+            // 1. OpenAI Chat Completion 호출 (GPT-4o-mini 모델 활용)
+            const chatRes = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: 'POST',
-                body: JSON.stringify({ question: `프롬프트: 너는 ${persona}. 질문: ${question}` })
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [
+                        { role: "system", content: `너는 ${persona}` },
+                        { role: "user", content: question }
+                    ]
+                })
             });
             const chatData = await chatRes.json();
-            const answer = chatData.answer;
+            if (chatData.error) throw new Error(chatData.error.message);
+            
+            const answer = chatData.choices[0].message.content;
             document.getElementById('answerBox').textContent = answer;
 
-            // TTS 음성 변환 요청
+            // 2. OpenAI Audio Speech 호출 (TTS 기능)
             status.textContent = "목소리를 불러오는 중입니다...";
-            const ttsRes = await fetch(TTS_URL, {
+            const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
                 method: 'POST',
-                body: JSON.stringify({ type: 'tts', text: answer, voice: 'onyx' }) // 위엄 있는 onyx 목소리
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "tts-1",
+                    input: answer,
+                    voice: "onyx" // 위엄 있는 남성 목소리
+                })
             });
-            const ttsData = await ttsRes.json();
-            if(ttsData.audioBase64) {
-                const player = document.getElementById('audioPlayer');
-                player.src = `data:audio/mpeg;base64,${ttsData.audioBase64}`;
-                player.classList.remove('hidden');
-                player.play();
-            }
+            
+            if (!ttsRes.ok) throw new Error("TTS 호출에 실패했습니다.");
+            
+            // 바이너리 오디오 데이터를 Blob 객체로 변환하여 재생
+            const audioBlob = await ttsRes.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const player = document.getElementById('audioPlayer');
+            player.src = audioUrl;
+            player.classList.remove('hidden');
+            player.play();
+
             status.textContent = "인터뷰 완료.";
         } catch(e) {
             status.textContent = "오류 발생.";
             alert("연동 실패: " + e.message);
+            console.error(e);
         }
     });
 
-    /* [데이터 연동: CRUD] [11, 18] */
+    /* [데이터 연동: Firebase Realtime Database 저장 및 읽기] */
     document.getElementById('saveBtn').addEventListener('click', async () => {
-        if(!currentUser) return;
+        if(!currentUser) return alert("로그인이 필요합니다.");
         const answer = document.getElementById('answerBox').textContent;
-        const personaName = document.getElementById('personaSelect').selectedOptions.text;
         
-        if(answer.includes("기록된 대화가 없습니다")) return alert("기록할 내용이 없습니다.");
+        // 인물 이름 안전하게 추출하도록 수정 완료
+        const personaSelect = document.getElementById('personaSelect');
+        const personaName = personaSelect.options[personaSelect.selectedIndex].text;
+        
+        if(answer.includes("아직 기록된 대화가 없습니다")) return alert("기록할 내용이 없습니다.");
 
-        // Realtime Database에 저장
-        const historyRef = ref(database, `users/${currentUser.uid}/items`);
-        const newItemRef = push(historyRef);
-        await set(newItemRef, {
-            name: personaName,
-            text: answer,
-            date: new Date().toLocaleString()
-        });
-        alert("사초에 기록되었습니다.");
+        try {
+            // Realtime Database에 저장 경로 지정
+            const historyRef = ref(database, `users/${currentUser.uid}/items`);
+            const newItemRef = push(historyRef);
+            await set(newItemRef, {
+                name: personaName,
+                text: answer,
+                date: new Date().toLocaleString()
+            });
+            alert("사초에 성공적으로 기록되었습니다.");
+        } catch(e) {
+            alert("DB 저장 오류: " + e.message);
+        }
     });
 
     function loadHistory(uid) {
@@ -221,7 +252,7 @@
                         <strong>[${item.name}]</strong>
                         <span style="font-size:12px; color:#999;">${item.date}</span>
                     </div>
-                    <p style="margin:10px 0;">${item.text}</p>
+                    <p style="margin:10px 0; white-space: pre-wrap;">${item.text}</p>
                     <button class="danger-btn" onclick="window.deleteRecord('${id}')">삭제</button>
                 `;
                 listDiv.appendChild(itemDiv);
@@ -229,9 +260,13 @@
         });
     }
 
+    // 전역 삭제 함수 정의
     window.deleteRecord = (id) => {
-        if(confirm("기록을 삭제하시겠습니까?")) {
-            remove(ref(database, `users/${currentUser.uid}/items/${id}`));
+        if(!currentUser) return;
+        if(confirm("기록을 사초에서 삭제하시겠습니까?")) {
+            remove(ref(database, `users/${currentUser.uid}/items/${id}`))
+                .then(() => alert("삭제되었습니다."))
+                .catch((e) => alert("삭제 실패: " + e.message));
         }
     };
 </script>
