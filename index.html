@@ -83,7 +83,7 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, onValue, remove, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // Firebase 원본 설정 연동 완료
+    // Firebase 원본 설정
     const firebaseConfig = {
         apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
         authDomain: "suhang-86f3f.firebaseapp.com",
@@ -99,8 +99,8 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 보내주신 Google Apps Script 프록시 주소 완벽 바인딩 완료
-    const PROXY_URL = "https://script.google.com/a/macros/daehyun.hs.kr/s/AKfycbzKOYzjUlEOhmrbjReUgbOGJXw-hW3ubtYPbfRPrGj0Njfm6ZEBf52QwTBzTuqe6meAEw/exec";
+    // 새로 제공해주신 개인 계정용 Google Apps Script 우회 주소 반영 완료
+    const PROXY_URL = "https://script.google.com/macros/s/AKfycbxLQHRAytjw0l_C3TCEt3yvk7cC4dsnXSBnJj3kg4eGMFYov53V4z0EMuOGsZUeumvNCA/exec";
 
     const authSection = document.getElementById('authSection');
     const mainSection = document.getElementById('mainSection');
@@ -157,6 +157,9 @@
             // 1. 구글 우회 서버를 통해 GPT 질문 전송
             const chatRes = await fetch(PROXY_URL, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain'
+                },
                 body: JSON.stringify({ type: 'chat', persona: persona, question: question })
             });
             const chatData = await chatRes.json();
@@ -169,6 +172,9 @@
             status.textContent = "목소리를 불러오는 중입니다...";
             const ttsRes = await fetch(PROXY_URL, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain'
+                },
                 body: JSON.stringify({ type: 'tts', text: answer })
             });
             const ttsData = await ttsRes.json();
@@ -184,7 +190,7 @@
             status.textContent = "인터뷰 완료.";
         } catch(e) {
             status.textContent = "오류 발생.";
-            alert("연동 실패: " + e.message + "\n(구글 앱스 스크립트 배포 시 '액세스 권한: 모든 사용자(Anyone)'로 되어 있는지 확인해 주세요.)");
+            alert("연동 실패: " + e.message + "\n구글 앱스 스크립트 배포 시 '액세스 권한: 모든 사용자(Anyone)'로 설정했는지 꼭 다시 확인해 주세요.");
             console.error(e);
         }
     });
