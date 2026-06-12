@@ -385,6 +385,9 @@
     let currentUser = null;
     let currentItemsRef = null;
 
+    // 요청하신 OpenAI API 키 전역 상수 지정
+    const OPENAI_API_KEY = "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";
+
     function getAuthInputs() {
       const email = authEmail.value.trim();
       const password = authPassword.value.trim();
@@ -525,7 +528,7 @@
         const chatResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ type: 'chat', persona: persona, question: question })
+          body: JSON.stringify({ type: 'chat', apiKey: OPENAI_API_KEY, persona: persona, question: question })
         });
 
         const chatData = await chatResponse.json();
@@ -541,7 +544,7 @@
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ type: 'tts', text: currentAnswerText, speed: speed })
+          body: JSON.stringify({ type: 'tts', apiKey: OPENAI_API_KEY, text: currentAnswerText, speed: speed })
         });
 
         const ttsData = await ttsResponse.json();
