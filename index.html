@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>북방의 거인: AI 역사 인터뷰</title>
+  <title>북방의 거인들: AI 역사 인터뷰</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -337,7 +337,7 @@
       off
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // 귀하의 Firebase Config 환경 설정
+    // Firebase Config 환경 설정
     const firebaseConfig = {
       apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
       authDomain: "suhang-86f3f.firebaseapp.com",
@@ -349,7 +349,7 @@
       measurementId: "G-YDVD63CF7H"
     };
     
-    // 뼈대 초기화
+    // 초기화
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const database = getDatabase(app);
@@ -384,9 +384,6 @@
     let currentAnswerText = ""; 
     let currentUser = null;
     let currentItemsRef = null;
-
-    // 요청하신 OpenAI API 키 전역 상수 지정
-    const OPENAI_API_KEY = "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";
 
     function getAuthInputs() {
       const email = authEmail.value.trim();
@@ -445,7 +442,6 @@
         authEmail.value = '';
         authPassword.value = '';
         
-        // 해당 유저 전용 Realtime DB 리스너 가동
         startRealtimeDataListener(user.uid);
       } else {
         currentUser = null;
@@ -462,7 +458,6 @@
       stopRealtimeDataListener();
       statusBox.textContent = '사초(DB) 기록을 동기화하는 중...';
 
-      // 유저 고유 공간 하위에 아이템 정렬 경로 지정
       currentItemsRef = ref(database, `users/${uid}/items`);
 
       onValue(currentItemsRef, (snapshot) => {
@@ -482,7 +477,6 @@
       }
     }
 
-    // 메인 비즈니스 로직 이벤트 바인딩
     makeBtn.addEventListener('click', startInterview);
     clearBtn.addEventListener('click', clearPage);
     saveBtn.addEventListener('click', addFirebaseData);
@@ -505,7 +499,7 @@
       audioPlayer.classList.add('hidden');
       downloadLink.classList.add('hidden');
 
-      // 1단계: 선제 조건 없는 질문 사항 데이터 임시 백업 보존
+      // 1단계: 질문 임시 저장 보존
       try {
         setLoading(true);
         resultBox.classList.add('hidden');
@@ -521,14 +515,14 @@
         });
       } catch (fbError) { console.error("임시 백업 실패", fbError); }
 
-      // 2단계: OpenAI 챗봇 교신
+      // 2단계: OpenAI 챗봇 교신 (보안을 위해 body에서 apiKey 매개변수를 완전히 제외시켰습니다)
       try {
         statusBox.textContent = `${selectedName} 장군에게 밀서를 발송했습니다...`;
 
         const chatResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ type: 'chat', apiKey: OPENAI_API_KEY, persona: persona, question: question })
+          body: JSON.stringify({ type: 'chat', persona: persona, question: question })
         });
 
         const chatData = await chatResponse.json();
@@ -539,12 +533,12 @@
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        // 3단계: TTS 음성 복원 변환 호출
+        // 3단계: TTS 음성 변환 호출
         statusBox.textContent = '인물의 음성을 복원하는 중입니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ type: 'tts', apiKey: OPENAI_API_KEY, text: currentAnswerText, speed: speed })
+          body: JSON.stringify({ type: 'tts', text: currentAnswerText, speed: speed })
         });
 
         const ttsData = await ttsResponse.json();
@@ -604,7 +598,7 @@
       } catch (error) { alert('삭제 실패'); }
     };
 
-    /* 📜 기록 수정 변경 건 저장 */
+    /* 📜 기록 수정 */
     window.updateData = async function(id) {
       if (!currentUser) return;
       const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
@@ -704,7 +698,6 @@
       }
     }
 
-    // 엔터키 숏컷 편의 기능 추가
     document.addEventListener('keydown', function(event) {
       if (event.key !== 'Enter') return;
       const activeId = document.activeElement.id;
