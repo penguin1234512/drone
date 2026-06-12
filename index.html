@@ -405,7 +405,7 @@
       if (!credentials) return;
       try {
         await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
-        alert('사관 명부에 등록(회원가입)되었습니다!');
+        alert('사관 명부에 등록(회원가입)되었습니다');
       } catch (error) {
         alert(getKoreanErrorMessage(error.code));
       }
