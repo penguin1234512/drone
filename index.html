@@ -216,7 +216,7 @@
 
     audio { width: 100%; margin-top: 10px; }
     .list { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
-    
+     
     .item {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -269,7 +269,7 @@
 
     <div class="info">
       역사적 인물을 고르고 질문을 입력하면 AI 인터뷰 답변과 함께 생생한 음성을 들을 수 있습니다.<br />
-      완성된 답변은 아래 '사초(역사 기록)' 보관소에 안전하게 기록(Firebase DB)하고 관리할 수 있습니다.
+      完成된 답변은 아래 '사초(역사 기록)' 보관소에 안전하게 기록(Firebase DB)하고 관리할 수 있습니다.
     </div>
 
     <div class="option-box">
@@ -354,8 +354,8 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 💡 [변경 완료] 전달해주신 새로운 Apps Script 실행 주소로 연동을 교체했습니다.
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0WmMkMLOzWiIhq4EIZuzt6y8vR38k5kD0timshlAs5YSQevg9b0PjgNugbyZbLZK9AQ/exec';
+    // 💡 [변경 완료] 사관님이 새로 발급받아 전달해주신 OpenAI 전용 Apps Script URL로 정교하게 매칭하였습니다.
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx8ngLYg8MNo0DRyiPLG1J4GBzvSW2Z7FPakwx2De56nrv90fDrg2e1OhS5ViycuYdCWg/exec';
 
     // HTML DOM 인터페이스 연동
     const authContainer = document.getElementById('authContainer');
