@@ -342,6 +342,7 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js';
     import {
       getAuth,
       createUserWithEmailAndPassword,
@@ -360,7 +361,7 @@
       off
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // 🤝 사관님의 원본 Firebase 설정값 완벽 복원 완료!
+    // 사관님이 주신 Firebase 설정값 반영
     const firebaseConfig = {
       apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
       authDomain: "suhang-86f3f.firebaseapp.com",
@@ -372,12 +373,13 @@
       measurementId: "G-YDVD63CF7H"
     };
     
-    // 초기화
+    // Initialize Firebase (사관님 요청 사항 반영)
     const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 🤝 사관님의 실제 Apps Script 주소 원상 복구 완료!
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-OfugxkNN7kkT5CfpYFSmnq-OhZKn_MpvzhIy-5tZpnXvgDULKvt-1KtJxWqz0pS5Dg/exec';
 
     // HTML DOM 인터페이스 연동
@@ -601,7 +603,7 @@
         answerBox.textContent = currentAnswerText;
         resultBox.classList.remove('hidden');
       } finally {
-        document.getElementById('refreshBtn').click(); // 최신 DB 동기화 강제 새로고침
+        document.getElementById('refreshBtn').click(); 
         setLoading(false);
       }
     }
@@ -733,7 +735,6 @@
       resultBox.classList.add('hidden');
     }
 
-    // 💡 단단히 수리 완료된 한국어 오류 알림 매핑 함수
     function getKoreanErrorMessage(code) {
       switch (code) {
         case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
