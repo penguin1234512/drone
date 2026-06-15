@@ -97,7 +97,7 @@
       line-height: 1.6;
     }
 
-    /* 3열 옵션 배치로 변경 (인물, 모델, 목소리/속도 효율적 배치) */
+    /* 3열 옵션 배치 */
     .option-box {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -195,6 +195,9 @@
       font-weight: bold;
       font-size: 14px;
       text-align: center;
+      background: #f0f4c3;
+      padding: 8px;
+      border-radius: 8px;
     }
 
     .result-box {
@@ -319,7 +322,7 @@
       <button class="make-btn" id="makeBtn">질문 전송 및 음성 듣기</button>
     </div>
 
-    <div id="status" class="status"></div>
+    <div id="status" class="status">시스템 로딩 중...</div>
 
     <div id="resultBox" class="result-box hidden">
       <div class="label" id="answerTitle">인터뷰 답변 기록</div>
@@ -361,28 +364,8 @@
       off
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // 사관님이 주신 Firebase 설정값 반영
-    const firebaseConfig = {
-      apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
-      authDomain: "suhang-86f3f.firebaseapp.com",
-      databaseURL: "https://suhang-86f3f-default-rtdb.firebaseio.com",
-      projectId: "suhang-86f3f",
-      storageBucket: "suhang-86f3f.firebasestorage.app",
-      messagingSenderId: "412517168949",
-      appId: "1:412517168949:web:26766fd1b37b3fbd4f7e7c",
-      measurementId: "G-YDVD63CF7H"
-    };
-    
-    // Initialize Firebase (사관님 요청 사항 반영)
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
-
-    const auth = getAuth(app);
-    const database = getDatabase(app);
-
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-OfugxkNN7kkT5CfpYFSmnq-OhZKn_MpvzhIy-5tZpnXvgDULKvt-1KtJxWqz0pS5Dg/exec';
-
-    // HTML DOM 인터페이스 연동
+    // UI 요소 선동 정의
+    const statusBox = document.getElementById('status');
     const authContainer = document.getElementById('authContainer');
     const mainContainer = document.getElementById('mainContainer');
     const authEmail = document.getElementById('authEmail');
@@ -401,7 +384,6 @@
     const clearBtn = document.getElementById('clearBtn');
     const saveBtn = document.getElementById('saveBtn');
     const refreshBtn = document.getElementById('refreshBtn');
-    const statusBox = document.getElementById('status');
     const resultBox = document.getElementById('resultBox');
     const answerBox = document.getElementById('answerBox');
     const answerTitle = document.getElementById('answerTitle');
@@ -409,9 +391,66 @@
     const downloadLink = document.getElementById('downloadLink');
     const dataList = document.getElementById('dataList');
 
+    let auth;
+    let database;
+    let analytics;
     let currentAnswerText = ""; 
     let currentUser = null;
     let currentItemsRef = null;
+
+    // 사관님 고유 Firebase 설정값
+    const firebaseConfig = {
+      apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
+      authDomain: "suhang-86f3f.firebaseapp.com",
+      databaseURL: "https://suhang-86f3f-default-rtdb.firebaseio.com",
+      projectId: "suhang-86f3f",
+      storageBucket: "suhang-86f3f.firebasestorage.app",
+      messagingSenderId: "412517168949",
+      appId: "1:412517168949:web:26766fd1b37b3fbd4f7e7c",
+      measurementId: "G-YDVD63CF7H"
+    };
+    
+    // 🛡️ Firebase 초기화 안전 가드 장치 (여기서 뻗으면 즉시 alert 발생시킴)
+    try {
+      const app = initializeApp(firebaseConfig);
+      
+      // 웹 분석기 인스턴스 예외처리 적용 가동
+      try {
+        analytics = getAnalytics(app);
+      } catch (e) {
+        console.warn("Analytics 초기화 건너뜀 (로컬 파일 실행 등):", e.message);
+      }
+
+      auth = getAuth(app);
+      database = getDatabase(app);
+      statusBox.textContent = 'Firebase 시스템 정상 연동됨. 청사 입장 대기 중.';
+      
+      // 🔐 실시간 유저 인증 모니터 관측기 활성화
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          currentUser = user;
+          currentUserEmail.textContent = user.email;
+          authContainer.classList.add('hidden');
+          mainContainer.classList.remove('hidden');
+          authEmail.value = '';
+          authPassword.value = '';
+          startRealtimeDataListener(user.uid);
+        } else {
+          currentUser = null;
+          authContainer.classList.remove('hidden');
+          mainContainer.classList.add('hidden');
+          currentUserEmail.textContent = '-';
+          dataList.innerHTML = '';
+          stopRealtimeDataListener();
+        }
+      });
+
+    } catch (initError) {
+      statusBox.textContent = `CRITICAL: Firebase 연동 실패! 원인: ${initError.message}`;
+      alert(`[초기화 에러] Firebase 연결 설정 오류:\n${initError.message}\n\nconfig 값이 올바른지 콘솔 설정을 검토하세요.`);
+    }
+
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-OfugxkNN7kkT5CfpYFSmnq-OhZKn_MpvzhIy-5tZpnXvgDULKvt-1KtJxWqz0pS5Dg/exec';
 
     function getAuthInputs() {
       const email = authEmail.value.trim();
@@ -429,60 +468,50 @@
 
     /* 🔐 [Auth] 회원가입 */
     signUpBtn.addEventListener('click', async () => {
+      if (!auth) { alert('인증 시스템이 초기화되지 않았습니다.'); return; }
       const credentials = getAuthInputs();
       if (!credentials) return;
       try {
+        statusBox.textContent = '회원가입 요청 중...';
         await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
         alert('사관 명부에 등록(회원가입)되었습니다');
       } catch (error) {
-        alert(getKoreanErrorMessage(error.code));
+        const koMsg = getKoreanErrorMessage(error.code || error.message);
+        statusBox.textContent = `회원가입 실패: ${koMsg}`;
+        alert(`회원가입 오류: ${koMsg}\n[상세 에러코드: ${error.code || error.message}]`);
       }
     });
 
     /* 🔐 [Auth] 로그인 */
     logInBtn.addEventListener('click', async () => {
+      if (!auth) { alert('인증 시스템이 초기화되지 않았습니다.'); return; }
       const credentials = getAuthInputs();
       if (!credentials) return;
       try {
+        statusBox.textContent = '로그인 승인 요청 중...';
         await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
       } catch (error) {
-        alert(getKoreanErrorMessage(error.code));
+        const koMsg = getKoreanErrorMessage(error.code || error.message);
+        statusBox.textContent = `로그인 실패: ${koMsg}`;
+        alert(`로그인 오류: ${koMsg}\n[상세 에러코드: ${error.code || error.message}]`);
       }
     });
 
     /* 🔐 [Auth] 로그아웃 */
     logOutBtn.addEventListener('click', async () => {
+      if (!auth) return;
       try {
         await signOut(auth);
         clearPage();
+        statusBox.textContent = '로그아웃 되었습니다.';
       } catch (error) {
-        alert('로그아웃 도중 오류가 발생했습니다.');
-      }
-    });
-
-    /* 🔐 실시간 유저 인증 모니터 관측기 */
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        currentUser = user;
-        currentUserEmail.textContent = user.email;
-        authContainer.classList.add('hidden');
-        mainContainer.classList.remove('hidden');
-        authEmail.value = '';
-        authPassword.value = '';
-        
-        startRealtimeDataListener(user.uid);
-      } else {
-        currentUser = null;
-        authContainer.classList.remove('hidden');
-        mainContainer.classList.add('hidden');
-        currentUserEmail.textContent = '-';
-        dataList.innerHTML = '';
-        stopRealtimeDataListener();
+        alert(`로그아웃 오류: ${error.message}`);
       }
     });
 
     /* 📜 DB 실시간 연동 리스너 규칙 */
     function startRealtimeDataListener(uid) {
+      if (!database) return;
       stopRealtimeDataListener();
       statusBox.textContent = '사초(DB) 기록을 동기화하는 중...';
 
@@ -494,12 +523,13 @@
         statusBox.textContent = '실시간 동기화 완료.';
       }, (error) => {
         console.error(error);
-        statusBox.textContent = '사초 데이터를 가져오지 못했습니다. 보안 규칙을 점검하십시오.';
+        statusBox.textContent = `DB 연동 실패: ${error.message}`;
+        alert(`Firebase DB 에러: ${error.message}\nRealtime Database 규칙(Rules) 탭에서 접근 권한 설정을 점검해 보십시오.`);
       });
     }
 
     function stopRealtimeDataListener() {
-      if (currentItemsRef) {
+      if (currentItemsRef && database) {
         off(currentItemsRef);
         currentItemsRef = null;
       }
@@ -515,12 +545,12 @@
     /* 📜 코어 기능: 인물 인터뷰 시스템 호출 + 세부 TTS 파라미터 전송 연동 */
     async function startInterview() {
       if (!currentUser) { alert('로그인이 만료되었습니다.'); return; }
+      if (!database) { alert('데이터베이스 인스턴스가 존재하지 않습니다.'); return; }
       
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       
-      // 설정값 가져오기
       const model = modelSelect.value;
       const voice = voiceSelect.value;
       const speed = Number(speedInput.value || 1.0);
@@ -546,7 +576,10 @@
           createdAt: new Date().toLocaleString('ko-KR'),
           updatedAt: ''
         });
-      } catch (fbError) { console.error("임시 백업 실패", fbError); }
+      } catch (fbError) { 
+        console.error("임시 백업 실패", fbError); 
+        statusBox.textContent = `DB 기록 실패: ${fbError.message}`;
+      }
 
       // 2단계: AI 챗봇 교신
       try {
@@ -558,9 +591,11 @@
           body: JSON.stringify({ type: 'chat', persona: persona, question: question })
         });
 
+        if (!chatResponse.ok) throw new Error(`네트워크 응답 오류 (상태코드: ${chatResponse.status})`);
+
         const chatData = await chatResponse.json();
-        if (chatData.error) throw new Error(chatData.error);
-        if (!chatData.answer) throw new Error('데이터 응답 실패');
+        if (chatData.error) throw new Error(`Apps Script 에러: ${chatData.error}`);
+        if (!chatData.answer) throw new Error('서버로부터 답변 데이터를 받지 못했습니다.');
 
         currentAnswerText = chatData.answer;
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
@@ -580,8 +615,10 @@
           })
         });
 
+        if (!ttsResponse.ok) throw new Error(`TTS 서버 통신 오류 (상태코드: ${ttsResponse.status})`);
+
         const ttsData = await ttsResponse.json();
-        if (ttsData.error) throw new Error(ttsData.error);
+        if (ttsData.error) throw new Error(`Apps Script TTS 에러: ${ttsData.error}`);
         
         if (ttsData.audioBase64) {
           const audioUrl = base64ToAudioUrl(ttsData.audioBase64, 'audio/mpeg');
@@ -591,14 +628,18 @@
           downloadLink.download = makeFileName(selectedName);
           downloadLink.classList.remove('hidden');
           audioPlayer.play();
+        } else {
+          throw new Error('음성 데이터(Base64)가 유실되어 수신되었습니다.');
         }
 
         resultBox.classList.remove('hidden');
         statusBox.textContent = '대화 기록과 전용 목소리가 복원되었습니다.';
       } catch (error) {
         console.error(error);
-        statusBox.textContent = '교신 실패 (오류 발생)';
-        currentAnswerText = `[시스템 피드백]: API 작동 불가.\n원인: ${error.message}\n\n질문:\n${question}`;
+        statusBox.textContent = `❌ 통신 차단됨: ${error.message}`;
+        alert(`교신 오류 발생!\n\n원인: ${error.message}\n\n구글 앱스 스크립트 '배포 관리' 주소 상태를 재점검하세요.`);
+        
+        currentAnswerText = `[시스템 피드백]: 통신 및 실행 오류.\n원인: ${error.message}\n\n질문하려던 내용:\n${question}`;
         answerTitle.textContent = `⚠️ 통신 차단 (${selectedName})`;
         answerBox.textContent = currentAnswerText;
         resultBox.classList.remove('hidden');
@@ -610,7 +651,7 @@
 
     /* 📜 답변을 사초 보관소에 최종 정식 저장 */
     async function addFirebaseData() {
-      if (!currentUser) return;
+      if (!currentUser || !database) return;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       if (!currentAnswerText) return;
 
@@ -626,21 +667,24 @@
           updatedAt: ''
         });
         alert('역사 보관소(Realtime DB)에 안전하게 추가 기록되었습니다.');
-      } catch (error) { alert('Firebase 저장 도중 오류 발생'); }
+      } catch (error) { 
+        alert(`Firebase 저장 오류: ${error.message}`); 
+        statusBox.textContent = `저장 실패: ${error.message}`;
+      }
     }
 
     /* 📜 기록 삭제 */
     window.deleteData = async function(id) {
-      if (!currentUser) return;
+      if (!currentUser || !database) return;
       if (!confirm('해당 기록을 영구히 사삭(삭제)하시겠습니까?')) return;
       try {
         await remove(ref(database, `users/${currentUser.uid}/items/${id}`));
-      } catch (error) { alert('삭제 실패'); }
+      } catch (error) { alert(`삭제 실패: ${error.message}`); }
     };
 
     /* 📜 기록 수정 */
     window.updateData = async function(id) {
-      if (!currentUser) return;
+      if (!currentUser || !database) return;
       const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
       const editContent = document.getElementById(`edit-content-${id}`).value.trim();
 
@@ -652,7 +696,7 @@
           content: editContent,
           updatedAt: new Date().toLocaleString('ko-KR')
         });
-      } catch (error) { alert('수정 변경 실패'); }
+      } catch (error) { alert(`수정 변경 실패: ${error.message}`); }
     };
 
     /* 📜 화면 렌더링 그리기 */
@@ -693,15 +737,20 @@
     };
 
     function base64ToAudioUrl(base64, mimeType) {
-      const byteCharacters = atob(base64);
-      const byteArrays = [];
-      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-        const slice = byteCharacters.slice(offset, offset + 512);
-        const byteNumbers = new Array(slice.length);
-        for (let i = 0; i < slice.length; i++) { byteNumbers[i] = slice.charCodeAt(i); }
-        byteArrays.push(new Uint8Array(byteNumbers));
+      try {
+        const byteCharacters = atob(base64);
+        const byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+          const slice = byteCharacters.slice(offset, offset + 512);
+          const byteNumbers = new Array(slice.length);
+          for (let i = 0; i < slice.length; i++) { byteNumbers[i] = slice.charCodeAt(i); }
+          byteArrays.push(new Uint8Array(byteNumbers));
+        }
+        return URL.createObjectURL(new Blob(byteArrays, { type: mimeType }));
+      } catch (e) {
+        alert(`오디오 인코딩 디코딩 에러: ${e.message}`);
+        return '';
       }
-      return URL.createObjectURL(new Blob(byteArrays, { type: mimeType }));
     }
 
     function escapeHTML(text) {
@@ -726,7 +775,7 @@
 
     function clearPage() {
       questionInput.value = '';
-      statusBox.textContent = '';
+      statusBox.textContent = '시스템 대기 중...';
       currentAnswerText = "";
       audioPlayer.removeAttribute('src');
       audioPlayer.classList.add('hidden');
@@ -736,16 +785,16 @@
     }
 
     function getKoreanErrorMessage(code) {
-      switch (code) {
-        case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
-        case 'auth/invalid-email': return '이메일 형식이 올바르지 않습니다.';
-        case 'auth/weak-password': return '비밀번호가 너무 약합니다. 6자리 이상으로 입력해주세요.';
-        case 'auth/user-not-found': return '가입되지 않은 이메일입니다.';
-        case 'auth/wrong-password': return '비밀번호가 올바르지 않습니다.';
-        case 'auth/invalid-credential': return '이메일 또는 비밀번호가 올바르지 않습니다.';
-        case 'auth/network-request-failed': return '네트워크 연결 상태를 확인해주세요.';
-        default: return `인증 오류가 발생했습니다: ${code}`;
-      }
+      if (!code) return '알 수 없는 오류';
+      if (code.includes('auth/email-already-in-use')) return '이미 가입된 이메일입니다.';
+      if (code.includes('auth/invalid-email')) return '이메일 형식이 올바르지 않습니다.';
+      if (code.includes('auth/weak-password')) return '비밀번호가 너무 약합니다. 6자리 이상으로 입력해주세요.';
+      if (code.includes('auth/user-not-found')) return '가입되지 않은 이메일입니다.';
+      if (code.includes('auth/wrong-password')) return '비밀번호가 올바르지 않습니다.';
+      if (code.includes('auth/invalid-credential')) return '이메일 또는 비밀번호가 올바르지 않습니다.';
+      if (code.includes('auth/network-request-failed')) return '네트워크 연결 상태를 확인해주세요.';
+      if (code.includes('auth/operation-not-allowed')) return 'Firebase 콘솔에서 이메일/비밀번호 로그인 활성화가 꺼져있습니다.';
+      return `인증 오류가 발생했습니다: ${code}`;
     }
 
     document.addEventListener('keydown', function(event) {
