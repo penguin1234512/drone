@@ -377,7 +377,7 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 🔗 사관님이 요청하신 정상 작동 시트 백엔드 웹 앱 URL 완벽 맵핑 완료!
+    // 사관님 Apps Script 연동 URL 주소 업데이트 완료
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-OfugxkNN7kkT5CfpYFSmnq-OhZKn_MpvzhIy-5tZpnXvgDULKvt-1KtJxWqz0pS5Dg/exec';
 
     // HTML DOM 인터페이스 연동
@@ -510,7 +510,7 @@
       if (currentUser) startRealtimeDataListener(currentUser.uid);
     });
 
-    /* 📜 코어 기능: 인물 인터뷰 시스템 호출 + 두 번째 파일의 세부 TTS 파라미터 전송 연동 */
+    /* 📜 코어 기능: 인물 인터뷰 시스템 호출 + 세부 TTS 파라미터 전송 연동 */
     async function startInterview() {
       if (!currentUser) { alert('로그인이 만료되었습니다.'); return; }
       
@@ -518,7 +518,7 @@
       const persona = personaSelect.value;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
       
-      // 새로 매칭된 설정값 가져오기
+      // 설정값 가져오기
       const model = modelSelect.value;
       const voice = voiceSelect.value;
       const speed = Number(speedInput.value || 1.0);
@@ -564,7 +564,7 @@
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        // 3단계: TTS 음성 변환 호출 (선택하신 모델, 보이스, 속도 값을 담아 백엔드로 완벽 전송!)
+        // 3단계: TTS 음성 변환 호출
         statusBox.textContent = '선택하신 AI 목소리로 음성을 복원하는 중입니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -581,7 +581,6 @@
         const ttsData = await ttsResponse.json();
         if (ttsData.error) throw new Error(ttsData.error);
         
-        // 백엔드로부터 전달받은 Base64 오디오 바이너리를 플레이어 및 다운로드 링크에 완벽 바인딩
         if (ttsData.audioBase64) {
           const audioUrl = base64ToAudioUrl(ttsData.audioBase64, 'audio/mpeg');
           audioPlayer.src = audioUrl;
@@ -734,7 +733,8 @@
       resultBox.classList.add('hidden');
     }
 
-    getKoreanErrorMessage(code) {
+    // 💡여기에 function 키워드를 확실히 추가하여 문법 에러를 해결했습니다!
+    function getKoreanErrorMessage(code) {
       switch (code) {
         case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
         case 'auth/invalid-email': return '이메일 형식이 올바르지 않습니다.';
