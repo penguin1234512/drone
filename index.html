@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>북방의 : AI 역사 인터뷰</title>
+  <title>북방의 인: AI 역사 인터뷰</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -354,7 +354,8 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwkY7Zo9mO3AXyOknfXjKlpKUCie559fKCJWQ90JsuoO8KxlyE6O1bhe6cmmwYGJKNNpQ/exec';
+    // 요청하신 주소로 변경 완료
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxX8rdpBggEjVTry--MhjKe31kp4_ISIL4Fq3oOHMzqwfKLoB7xuPFHilq3i6iCF4xzhQ/exec';
 
     // HTML DOM 인터페이스 연동
     const authContainer = document.getElementById('authContainer');
@@ -515,7 +516,7 @@
         });
       } catch (fbError) { console.error("임시 백업 실패", fbError); }
 
-      // 2단계: OpenAI 챗봇 교신 (보안을 위해 body에서 apiKey 매개변수를 완전히 제외시켰습니다)
+      // 2단계: AI 챗봇 교신
       try {
         statusBox.textContent = `${selectedName} 장군에게 밀서를 발송했습니다...`;
 
@@ -559,7 +560,7 @@
       } catch (error) {
         console.error(error);
         statusBox.textContent = '교신 실패 (오류 발생)';
-        currentAnswerText = `[시스템 피드백]: OpenAI API 작동 불가.\n원인: ${error.message}\n\n질문:\n${question}`;
+        currentAnswerText = `[시스템 피드백]: API 작동 불가.\n원인: ${error.message}\n\n질문:\n${question}`;
         answerTitle.textContent = `⚠️ 통신 차단 (${selectedName})`;
         answerBox.textContent = currentAnswerText;
         resultBox.classList.remove('hidden');
