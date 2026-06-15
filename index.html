@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>북방의 역사: AI 역사 인터뷰</title>
+  <title>북방의 역사: AI 역사 인터뷰 & TTS</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -97,14 +97,16 @@
       line-height: 1.6;
     }
 
+    /* 3열 옵션 배치로 변경 (인물, 모델, 목소리/속도 효율적 배치) */
     .option-box {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
       gap: 10px;
       margin-bottom: 14px;
     }
 
     select, input {
+      width: 100%;
       height: 44px;
       padding: 0 12px;
       border: 1px solid #ddd;
@@ -216,7 +218,7 @@
 
     audio { width: 100%; margin-top: 10px; }
     .list { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
-     
+      
     .item {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -235,6 +237,9 @@
     .edit-box { display: grid; grid-template-columns: 1fr 2fr auto auto; gap: 8px; width: 100%; }
     .empty { text-align: center; padding: 30px; color: #888; background: #f7f9fb; border-radius: 16px; }
 
+    @media (max-width: 900px) {
+      .option-box { grid-template-columns: 1fr 1fr; }
+    }
     @media (max-width: 700px) {
       .option-box, .edit-box { grid-template-columns: 1fr; }
       .item { grid-template-columns: 1fr; }
@@ -260,7 +265,7 @@
 
   <div id="mainContainer" class="container hidden">
     <h1>북방의 거인들</h1>
-    <div class="subtitle">고구려와 발해의 영웅들을 AI 인터뷰와 목소리로 만나다</div>
+    <div class="subtitle">고구려와 발해의 영웅들을 AI 인터뷰와 맞춤형 음성으로 만나다</div>
 
     <div class="user-profile-bar">
       <div>접속 사관: <strong id="currentUserEmail" style="color:#1a237e;">-</strong></div>
@@ -268,8 +273,8 @@
     </div>
 
     <div class="info">
-      역사적 인물을 고르고 질문을 입력하면 AI 인터뷰 답변과 함께 생생한 음성을 들을 수 있습니다.<br />
-      完成된 답변은 아래 '사초(역사 기록)' 보관소에 안전하게 기록(Firebase DB)하고 관리할 수 있습니다.
+      역사적 인물과 **TTS 세부 옵션(모델, 목소리, 속도)**을 고르고 질문을 입력하세요.<br />
+      완성된 답변은 아래 '사초(역사 기록)' 보관소에 안전하게 기록(Firebase DB)하고 관리할 수 있습니다.
     </div>
 
     <div class="option-box">
@@ -278,6 +283,24 @@
         <select id="personaSelect">
           <option value="고구려의 광개토대왕이야. 위엄 있고 당당한 말투로 고구려의 기상과 영토 확장에 대해 답변해줘.">고구려 - 광개토대왕</option>
           <option value="발해를 건국한 대조영이야. 고구려를 계승한 자부심을 담아 완강하고 굳건하게 답변해줘.">발해 - 대조영</option>
+        </select>
+      </div>
+      <div>
+        <div class="label">음성 모델 품질</div>
+        <select id="modelSelect">
+          <option value="tts-1">tts-1 빠른 생성</option>
+          <option value="tts-1-hd">tts-1-hd 고품질</option>
+        </select>
+      </div>
+      <div>
+        <div class="label">AI 목소리 선택</div>
+        <select id="voiceSelect">
+          <option value="onyx" selected>onyx (중후한 남성)</option>
+          <option value="alloy">alloy (기본 중성)</option>
+          <option value="echo">echo (기개 있는 남성)</option>
+          <option value="fable">fable (서사적인 음색)</option>
+          <option value="nova">nova (밝은 여성)</option>
+          <option value="shimmer">shimmer (단호한 여성)</option>
         </select>
       </div>
       <div>
@@ -354,7 +377,7 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 💡 [변경 완료] 사관님이 새로 발급받아 전달해주신 OpenAI 전용 Apps Script URL로 정교하게 매칭하였습니다.
+    // 사관님 Apps Script 연동 URL 주소 유지
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxbg2vNPg8NI9ceAhwmJ3MrDeIDVstZMgdPTA6uXOSASg4AJ7wcDnKAE_CSRB9TxDQ0AA/exec';
 
     // HTML DOM 인터페이스 연동
@@ -369,6 +392,8 @@
 
     const questionInput = document.getElementById('questionInput');
     const personaSelect = document.getElementById('personaSelect');
+    const modelSelect = document.getElementById('modelSelect');
+    const voiceSelect = document.getElementById('voiceSelect');
     const speedInput = document.getElementById('speedInput');
     const makeBtn = document.getElementById('makeBtn');
     const clearBtn = document.getElementById('clearBtn');
@@ -485,16 +510,21 @@
       if (currentUser) startRealtimeDataListener(currentUser.uid);
     });
 
-    /* 📜 코어 기능: 인물 인터뷰 시스템 호출 */
+    /* 📜 코어 기능: 인물 인터뷰 시스템 호출 + 두 번째 파일의 세부 TTS 파라미터 전송 연동 */
     async function startInterview() {
       if (!currentUser) { alert('로그인이 만료되었습니다.'); return; }
       
       const question = questionInput.value.trim();
       const persona = personaSelect.value;
       const selectedName = personaSelect.options[personaSelect.selectedIndex].text;
+      
+      // 새로 매칭된 설정값 가져오기
+      const model = modelSelect.value;
+      const voice = voiceSelect.value;
       const speed = Number(speedInput.value || 1.0);
 
       if (!question) { alert('질문 내용을 빈칸 없이 적어주세요.'); return; }
+      if (speed < 0.25 || speed > 4.0) { alert('속도는 0.25부터 4.0 사이로 입력해주세요.'); return; }
 
       audioPlayer.removeAttribute('src');
       audioPlayer.classList.add('hidden');
@@ -510,7 +540,7 @@
         const newItemRef = push(itemsRef);
         await set(newItemRef, {
           title: `${selectedName}에 대한 질문`,
-          content: `[질문 본문]: ${question}\n(※ AI 답변 대기 중 또는 예기치 못한 에러 상태)`,
+          content: `[질문 본문]: ${question}\n(※ AI 답변 대기 중 또는 에기치 못한 에러 상태)`,
           createdAt: new Date().toLocaleString('ko-KR'),
           updatedAt: ''
         });
@@ -534,12 +564,18 @@
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        // 3단계: TTS 음성 변환 호출
-        statusBox.textContent = '인물의 음성을 복원하는 중입니다...';
+        // 3단계: TTS 음성 변환 호출 (새로 연동한 모델 및 보이스 값까지 함께 백엔드로 주입)
+        statusBox.textContent = '선택하신 AI 목소리로 음성을 복원하는 중입니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ type: 'tts', text: currentAnswerText, speed: speed })
+          body: JSON.stringify({ 
+            type: 'tts', 
+            text: currentAnswerText, 
+            model: model, 
+            voice: voice, 
+            speed: speed 
+          })
         });
 
         const ttsData = await ttsResponse.json();
@@ -550,13 +586,13 @@
           audioPlayer.src = audioUrl;
           audioPlayer.classList.remove('hidden');
           downloadLink.href = audioUrl;
-          downloadLink.download = `interview-${selectedName}.mp3`;
+          downloadLink.download = makeFileName(selectedName);
           downloadLink.classList.remove('hidden');
           audioPlayer.play();
         }
 
         resultBox.classList.remove('hidden');
-        statusBox.textContent = '대화 기록이 갱신되었습니다.';
+        statusBox.textContent = '대화 기록과 전용 목소리가 복원되었습니다.';
       } catch (error) {
         console.error(error);
         statusBox.textContent = '교신 실패 (오류 발생)';
@@ -565,6 +601,7 @@
         answerBox.textContent = currentAnswerText;
         resultBox.classList.remove('hidden');
       } finally {
+        document.getElementById('refreshBtn').click(); // 최신 DB 동기화 강제 새로고침
         setLoading(false);
       }
     }
@@ -673,6 +710,16 @@
     function setLoading(isLoading) {
       makeBtn.disabled = isLoading;
       makeBtn.textContent = isLoading ? '전령 교신 중...' : '질문 전송 및 음성 듣기';
+    }
+
+    function makeFileName(name) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hour = String(now.getHours()).padStart(2, '0');
+      const minute = String(now.getMinutes()).padStart(2, '0');
+      return `interview-${name}-${year}${month}${day}-${hour}${minute}.mp3`;
     }
 
     function clearPage() {
