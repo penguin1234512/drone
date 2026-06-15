@@ -377,8 +377,8 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // 사관님 Apps Script 연동 URL 주소 유지
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgK8uvjcgqPd7JZsv1RWBFn3uvpSlBUu37a49ePJPunl--wm306Mc-MANfVT0a99UGmg/exec';
+    // 🔗 사관님이 요청하신 정상 작동 시트 백엔드 웹 앱 URL 완벽 맵핑 완료!
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-OfugxkNN7kkT5CfpYFSmnq-OhZKn_MpvzhIy-5tZpnXvgDULKvt-1KtJxWqz0pS5Dg/exec';
 
     // HTML DOM 인터페이스 연동
     const authContainer = document.getElementById('authContainer');
@@ -540,7 +540,7 @@
         const newItemRef = push(itemsRef);
         await set(newItemRef, {
           title: `${selectedName}에 대한 질문`,
-          content: `[질문 본문]: ${question}\n(※ AI 답변 대기 중 또는 에기치 못한 에러 상태)`,
+          content: `[질문 본문]: ${question}\n(※ AI 답변 대기 중 또는 예기치 못한 에러 상태)`,
           createdAt: new Date().toLocaleString('ko-KR'),
           updatedAt: ''
         });
@@ -564,7 +564,7 @@
         answerTitle.textContent = `📜 ${selectedName}의 답변`;
         answerBox.textContent = currentAnswerText;
 
-        // 3단계: TTS 음성 변환 호출 (새로 연동한 모델 및 보이스 값까지 함께 백엔드로 주입)
+        // 3단계: TTS 음성 변환 호출 (선택하신 모델, 보이스, 속도 값을 담아 백엔드로 완벽 전송!)
         statusBox.textContent = '선택하신 AI 목소리로 음성을 복원하는 중입니다...';
         const ttsResponse = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -581,6 +581,7 @@
         const ttsData = await ttsResponse.json();
         if (ttsData.error) throw new Error(ttsData.error);
         
+        // 백엔드로부터 전달받은 Base64 오디오 바이너리를 플레이어 및 다운로드 링크에 완벽 바인딩
         if (ttsData.audioBase64) {
           const audioUrl = base64ToAudioUrl(ttsData.audioBase64, 'audio/mpeg');
           audioPlayer.src = audioUrl;
@@ -733,7 +734,7 @@
       resultBox.classList.add('hidden');
     }
 
-    function getKoreanErrorMessage(code) {
+    getKoreanErrorMessage(code) {
       switch (code) {
         case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
         case 'auth/invalid-email': return '이메일 형식이 올바르지 않습니다.';
