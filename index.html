@@ -364,7 +364,7 @@
       off
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // UI 요소 선동 정의
+    // UI 요소 정의
     const statusBox = document.getElementById('status');
     const authContainer = document.getElementById('authContainer');
     const mainContainer = document.getElementById('mainContainer');
@@ -398,7 +398,7 @@
     let currentUser = null;
     let currentItemsRef = null;
 
-    // 사관님 고유 Firebase 설정값
+    // Firebase 설정값
     const firebaseConfig = {
       apiKey: "AIzaSyDTKTX3tTAaSAecMkvEzevbuRQmwuRaDWo",
       authDomain: "suhang-86f3f.firebaseapp.com",
@@ -410,11 +410,10 @@
       measurementId: "G-YDVD63CF7H"
     };
     
-    // 🛡️ Firebase 초기화 안전 가드 장치 (여기서 뻗으면 즉시 alert 발생시킴)
+    // Firebase 초기화 및 안전 가드 장치
     try {
       const app = initializeApp(firebaseConfig);
       
-      // 웹 분석기 인스턴스 예외처리 적용 가동
       try {
         analytics = getAnalytics(app);
       } catch (e) {
@@ -425,7 +424,7 @@
       database = getDatabase(app);
       statusBox.textContent = 'Firebase 시스템 정상 연동됨. 청사 입장 대기 중.';
       
-      // 🔐 실시간 유저 인증 모니터 관측기 활성화
+      // 실시간 유저 인증 모니터 관측기 활성화
       onAuthStateChanged(auth, (user) => {
         if (user) {
           currentUser = user;
@@ -450,6 +449,7 @@
       alert(`[초기화 에러] Firebase 연결 설정 오류:\n${initError.message}\n\nconfig 값이 올바른지 콘솔 설정을 검토하세요.`);
     }
 
+    // Google Apps Script 웹 앱 URL 반영
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzI2rurrcWTuAnRLYBhWZr0ggYF0ndNI4JLIoDnFxT1wmR603kBuR9tMHsTHCEoz142Sg/exec';
 
     function getAuthInputs() {
